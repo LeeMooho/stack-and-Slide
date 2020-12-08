@@ -25,18 +25,22 @@ public class GhostBlock2 : MonoBehaviour {
 
     void Update() {
         cBlock = block.target;
-        
 
-        if (cBlock!=null)
-             if(Physics.Raycast(cBlock.transform.parent.position, Vector3.up * (-1), out hit, 20)) {
-                if (hit.collider.gameObject.tag =="Floor"|| hit.collider.gameObject.tag == "FixedBlock") {
-                    distanceY = hit.distance-1;
+
+        if (cBlock != null) {
+            if (Physics.Raycast(cBlock.transform.position, Vector3.up * (-1), out hit, 20)) {
+                if (hit.collider.gameObject.tag == "Floor" || hit.collider.gameObject.tag == "FixedBlock") {
+                    distanceY = hit.distance - 1;
                     maxY = new Vector3(0, distanceY, 0);
                 }
             }
 
-        transform.parent.rotation = cBlock.transform.parent.rotation;
-        transform.parent.position = cBlock.transform.parent.position - maxY;
+
+            transform.parent.rotation = cBlock.transform.parent.rotation;
+            transform.parent.position = cBlock.transform.parent.position - maxY;
+
+        }
+
     }
 
 

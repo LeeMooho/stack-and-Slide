@@ -49,7 +49,7 @@ public class stage : MonoBehaviour {
     public Text TText;
     public Text ZText;
 
-    int A1Number;
+    public int A1Number;
     int A2Number;
     int INumber;
     int ONumber;
@@ -78,7 +78,9 @@ public class stage : MonoBehaviour {
     void Awake() {
         playUI.SetActive(false);
         mainMenu.SetActive(true);
-        ResetStage();
+        stageManager = GameObject.Find("StageManager").GetComponent<StageManager>();
+        stageManager.ResetStage();
+        CallVari();
     }
 
 
@@ -161,11 +163,13 @@ public class stage : MonoBehaviour {
     public void SelectStage(int A) {
         switch(A){
             case 101:
-                StageManager.Stage101();
                 playUI.SetActive(true);
                 mainMenu.SetActive(false);
+                stageManager.stage101();
+                CallVari();
                 OnPlay = true;
                 FloorColor();
+                leftBlock();
                 break;
 
         }
@@ -176,7 +180,7 @@ public class stage : MonoBehaviour {
 
     void FloorColor() {
 
-        while (OnPlay = true) {
+        if(OnPlay = true) {
             for (int i = 0; i < 64; i++) {
                 if (stage_Floor[i] == 1) {
                     floor[i].GetComponent<MeshRenderer>().material.color = new Color(0, 0, 0);
@@ -198,7 +202,7 @@ public class stage : MonoBehaviour {
     public void GenerateBlock(int A) {
         switch (A){
             case 1:
-                Vector3 Adjust1 = new Vector3(0.5f,0.5f,0.5f);
+                Vector3 Adjust1 = new Vector3(0,0,0);
                 pre_GhostBlock = Instantiate(GhostA1Block, GhostOrigin + Adjust1, Quaternion.identity);
                 pre_Block = Instantiate(A1Block, Origin+ Adjust1, Quaternion.identity);
                 A1Number--;
@@ -246,7 +250,7 @@ public class stage : MonoBehaviour {
                 break;
 
             case 7:
-                Vector3 Adjust7 = new Vector3(0, 0.5f, 0);
+                Vector3 Adjust7 = new Vector3(0, 0.5f, 0.5f);
                 pre_GhostBlock = Instantiate(GhostZBlock, GhostOrigin + Adjust7, Quaternion.identity);
                 pre_Block = Instantiate(ZBlock, Origin+ Adjust7, Quaternion.identity);
                 ZNumber--;
@@ -385,52 +389,35 @@ public class stage : MonoBehaviour {
         mainMenu.SetActive(true);
     }
 
-    void ResetStage() {
 
-        A1Number = 0;
-        A2Number = 0;
-        INumber = 0;
-        ONumber = 0;
-        PNumber = 0;
-        TNumber = 0;
-        ZNumber = 0;
-
-        stage_Floor = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        };
-
-        stage_Wall = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        };
+    public void CallVari() {
+        A1Number = stageManager.A1Number;
+        A2Number = stageManager.A2Number;
+        INumber = stageManager.INumber;
+        ONumber = stageManager.ONumber;
+        PNumber = stageManager.PNumber;
+        TNumber = stageManager.TNumber;
+        ZNumber = stageManager.ZNumber;
 
 
-        stage_FrontWall = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        };
+        stage_Floor = stageManager.stage_Floor;
+        stage_Wall = stageManager.stage_Wall;
+        stage_FrontWall = stageManager.stage_FrontWall;
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     }
-
 
 }
 

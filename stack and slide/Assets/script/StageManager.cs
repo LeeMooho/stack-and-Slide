@@ -6,24 +6,23 @@ using UnityEngine;
 
 public class StageManager : MonoBehaviour {
 
-    int A1Number;
-    int A2Number;
-    int INumber;
-    int ONumber;
-    int PNumber;
-    int TNumber;
-    int ZNumber;
+    public int A1Number;
+    public int A2Number;
+    public int INumber;
+    public int ONumber;
+    public int PNumber;
+    public int TNumber;
+    public int ZNumber;
 
 
-    int[] stage_Floor;
-    int[] stage_Wall;
-    int[] stage_FrontWall;
-
-
+    public int[] stage_Floor;
+    public int[] stage_Wall;
+    public int[] stage_FrontWall;
 
 
     public void ResetStage() {
 
+        
         A1Number = 0;
         A2Number = 0;
         INumber = 0;
@@ -68,7 +67,9 @@ public class StageManager : MonoBehaviour {
 
     }
 
-    public void Stage101() {
+
+    public void stage101() {
+
 
         A1Number = 1;
         A2Number = 1;
@@ -114,9 +115,8 @@ public class StageManager : MonoBehaviour {
 
 
 
+
     }
-
-
 
 
 

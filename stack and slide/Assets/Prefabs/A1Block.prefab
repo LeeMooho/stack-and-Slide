@@ -17,6 +17,8 @@ GameObject:
   - component: {fileID: 4805045912988458439}
   - component: {fileID: 4805045912988458436}
   - component: {fileID: 6315953881326257682}
+  - component: {fileID: 3146514516007157883}
+  - component: {fileID: 4898556036287978043}
   m_Layer: 8
   m_Name: A1 block
   m_TagString: Block
@@ -110,7 +112,7 @@ BoxCollider:
   m_GameObject: {fileID: 4805045913331677255}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Size: {x: 1, y: 1, z: 2}
   m_Center: {x: -1.5, y: 0.5, z: 1.5}
@@ -123,7 +125,7 @@ BoxCollider:
   m_GameObject: {fileID: 4805045913331677255}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Size: {x: 1, y: 2, z: 1}
   m_Center: {x: -0.5, y: 1, z: 1}
@@ -138,8 +140,8 @@ BoxCollider:
   m_IsTrigger: 1
   m_Enabled: 1
   serializedVersion: 2
-  m_Size: {x: 1, y: 2, z: 1}
-  m_Center: {x: -0.5, y: 1, z: 1}
+  m_Size: {x: 0.95, y: 0.95, z: 0.95}
+  m_Center: {x: -0.5, y: 0.5, z: 1}
 --- !u!65 &4805045912988458436
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -151,8 +153,8 @@ BoxCollider:
   m_IsTrigger: 1
   m_Enabled: 1
   serializedVersion: 2
-  m_Size: {x: 1, y: 1, z: 2}
-  m_Center: {x: -1.5, y: 0.5, z: 1.5}
+  m_Size: {x: 0.95, y: 0.95, z: 0.95}
+  m_Center: {x: -1.5, y: 0.5, z: 1}
 --- !u!114 &6315953881326257682
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -166,6 +168,34 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 0}
+  preTarget: {fileID: 0}
+  BlockRotation: 0
+--- !u!65 &3146514516007157883
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4805045913331677255}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Size: {x: 0.95, y: 0.95, z: 0.95}
+  m_Center: {x: -1.5, y: 0.5, z: 2}
+--- !u!65 &4898556036287978043
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4805045913331677255}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Size: {x: 0.95, y: 0.95, z: 0.95}
+  m_Center: {x: -0.5, y: 1.5, z: 1}
 --- !u!1 &4805045914197665822
 GameObject:
   m_ObjectHideFlags: 0
@@ -177,7 +207,7 @@ GameObject:
   - component: {fileID: 4805045914197665820}
   m_Layer: 8
   m_Name: A1Block
-  m_TagString: ParentBlock
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -191,7 +221,7 @@ Transform:
   m_GameObject: {fileID: 4805045914197665822}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.99, y: 0.99, z: 0.99}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 4805045913331677252}
   m_Father: {fileID: 0}

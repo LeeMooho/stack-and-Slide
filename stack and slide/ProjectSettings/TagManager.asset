@@ -4,13 +4,13 @@
 TagManager:
   serializedVersion: 2
   tags:
-  - Floor
-  - Block
-  - FixedBlock
-  - GhostBlock
   - Wall
+  - Floor
   - ParentBlock
+  - GhostBlock
+  - Block
   - OnFixedBlock
+  - FixedBlock
   layers:
   - Default
   - TransparentFX
@@ -20,11 +20,11 @@ TagManager:
   - UI
   - 
   - 
-  - Block
-  - Floor
-  - FixedBlock
-  - GhostBlock
-  - Wall
+  - 
+  - 
+  - 
+  - 
+  - 
   - 
   - 
   - 
