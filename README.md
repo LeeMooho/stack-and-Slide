@@ -1,8 +1,8 @@
 <h1>블록쌓기 게임</h1>
 
-개발기간: 3개월 
-플랫폼: Android
-개발환경: C#, Unity
+개발기간: 3개월 <br>
+플랫폼: Android <br>
+개발환경: C#, Unity <br>
 
 플레이스토어
 https://play.google.com/store/apps/details?id=happynoon.StackandSlide&pcampaignid=web_share
