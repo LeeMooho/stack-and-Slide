@@ -142,6 +142,7 @@ public sealed class GameplayExperience : MonoBehaviour
             puzzle.ShowProjectionFeedback(lastEvaluation, false, highContrast);
             lastEvaluation = null;
         }
+        ImprovementCombo = 0;
         Refresh();
     }
 
@@ -244,6 +245,7 @@ public sealed class GameplayExperience : MonoBehaviour
             "Use 10 blocks (" + Math.Min(profile.LifetimeBlocksUsed, 10) + "/10)." };
         var text = new StringBuilder();
         text.AppendLine("LOCAL ACHIEVEMENTS  |  " + profile.GetUnlockedAchievements().Length + "/6");
+        text.AppendLine(profile.TotalXp + " best-score XP  |  " + profile.CompletedStages + " stages cleared");
         for (int i = 0; i < ids.Length; i++)
         {
             text.AppendLine((profile.IsUnlocked(ids[i]) ? "[UNLOCKED] " : "[LOCKED] ") + AchievementTitle(ids[i]));

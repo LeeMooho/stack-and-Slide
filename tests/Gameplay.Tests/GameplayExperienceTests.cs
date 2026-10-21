@@ -31,6 +31,7 @@ internal static class GameplayExperienceTests
         run("Reloading data inside a probe discards its obsolete evaluation", ReloadDuringProbe);
         run("Readability preferences survive a fresh experience", SettingsRoundTrip);
         run("The achievements drawer suspends piece input without releasing ownership", ModalInput);
+        run("A new piece resets improvement feedback for the old board", ImprovementFeedback);
     }
 
     private static void Equal<T>(T expected, T actual)
@@ -345,5 +346,24 @@ internal static class GameplayExperienceTests
         Click("Achievements and settings");
         Invoke(experience, "OnDisable");
         Equal(false, block.InputSuspended);
+    }
+
+    private static void ImprovementFeedback()
+    {
+        var f = new Program.Fixture();
+        var experience = Attach(f);
+        f.Stage.SelectStage(101);
+        Evaluate(f, false);
+        var improved = new bool[192];
+        improved[Array.FindIndex(f.Manager.stage_Floor, value => value == 1)] = true;
+        f.Stage.ProjectionProbe = new Observations(improved);
+        f.Stage.Slide();
+        Equal(1, experience.ImprovementCombo);
+        Equal(true, experience.DisplayState.Detail.Contains("Combo x1"));
+        f.Stage.GenerateBlock(1);
+        Equal(0, experience.ImprovementCombo);
+        Equal(false, experience.DisplayState.Detail.Contains("Combo"));
+        Evaluate(f, false);
+        Equal(0, experience.ImprovementCombo);
     }
 }
