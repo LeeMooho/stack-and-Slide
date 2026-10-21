@@ -16,6 +16,10 @@ internal static class Program
         Run("Stage 101 preserves its inventory and all grid cells", Stage101);
         Run("Stage selection updates menus, colors and inventory slots", SelectStage);
         Run("Unknown stage selection leaves the menus unchanged", UnknownStage);
+        Run("Menu actions cannot spawn pieces or report a puzzle result", ActionsOutsidePlay);
+        Run("Restart removes whole spawned roots and restores inventory", RestartStage);
+        Run("Returning to the menu clears pieces and inventory", MenuCleanup);
+        Run("Grid colors return to their authored values on exit", RestoreGridColors);
         for (int i = 1; i <= 7; i++)
         {
             int block = i;
@@ -158,6 +162,7 @@ internal static class Program
     private static void SpawnBlock(int number)
     {
         var f = new Fixture();
+        f.Stage.SelectStage(101);
         f.Manager.stage101();
         f.Manager.ONumber = 1;
         f.Stage.CallVari();
@@ -181,6 +186,7 @@ internal static class Program
     private static void EmptyInventory()
     {
         var f = new Fixture();
+        f.StartEmptyStage();
         for (int i = 1; i <= 7; i++) f.Stage.GenerateBlock(i);
         Equal(0, UObject.Spawns.Count);
         Equal(0, f.Stage.A1Number);
@@ -194,6 +200,64 @@ internal static class Program
         f.Stage.GenerateBlock(8);
         Equal(0, UObject.Spawns.Count);
         Equal(1, f.Stage.A1Number);
+    }
+
+    private static void ActionsOutsidePlay()
+    {
+        var f = new Fixture();
+        f.Manager.stage101();
+        f.Stage.CallVari();
+        f.Stage.GenerateBlock(1);
+        f.Stage.Slide();
+        Equal(0, UObject.Spawns.Count);
+        Equal(1, f.Stage.A1Number);
+        Equal(0, Debug.Messages.Count);
+        Equal(0, Physics.Directions.Count);
+    }
+
+    private static void RestartStage()
+    {
+        var f = new Fixture();
+        f.Stage.SelectStage(101);
+        f.Stage.GenerateBlock(1);
+        var oldRoots = UObject.Spawns.Select(spawn => spawn.Clone).ToArray();
+        f.Stage.SelectStage(101);
+        foreach (var root in oldRoots)
+        {
+            Equal(false, root.activeSelf);
+            Equal(true, UObject.Destroyed.Contains(root));
+        }
+        Equal(null, f.Stage.pre_GhostBlock);
+        Equal(1, f.Stage.A1Number);
+        f.Stage.GenerateBlock(1);
+        Equal(4, UObject.Spawns.Count);
+    }
+
+    private static void MenuCleanup()
+    {
+        var f = new Fixture();
+        f.Stage.SelectStage(101);
+        f.Stage.GenerateBlock(1);
+        var oldRoots = UObject.Spawns.Select(spawn => spawn.Clone).ToArray();
+        f.Stage.openMainMenu();
+        foreach (var root in oldRoots) Equal(false, root.activeSelf);
+        Equal(null, f.Stage.pre_GhostBlock);
+        Equal(0, f.Stage.A1Number);
+        Equal(false, f.Stage.A2Image.activeSelf);
+        f.Stage.GenerateBlock(2);
+        f.Stage.Slide();
+        Equal(2, UObject.Spawns.Count);
+        Equal(0, Debug.Messages.Count);
+    }
+
+    private static void RestoreGridColors()
+    {
+        var authored = new Color(.2f, .3f, .4f);
+        var f = new Fixture(authored);
+        f.Stage.SelectStage(101);
+        Equal(Color.black, f.Stage.floor[26].GetComponent<MeshRenderer>().material.color);
+        f.Stage.openMainMenu();
+        Equal(authored, f.Stage.floor[26].GetComponent<MeshRenderer>().material.color);
     }
 
     private static void ConcurrentSpawn()
@@ -301,6 +365,7 @@ internal static class Program
     private static void UnexpectedProjection()
     {
         var f = new Fixture();
+        f.StartEmptyStage();
         EnqueueProjection(f, (g, c) => g == 1 && c == 10 ? Hit("Block") : (RaycastHit?)null);
         f.Stage.Slide();
         Equal("실패", Debug.Messages.Last());
@@ -309,6 +374,7 @@ internal static class Program
     private static void NonBlockProjection()
     {
         var f = new Fixture();
+        f.StartEmptyStage();
         f.Manager.stage_Floor[0] = 1;
         EnqueueProjection(f, (g, c) => g == 0 && c == 0 ? Hit("Floor") : (RaycastHit?)null);
         f.Stage.Slide();
@@ -318,6 +384,7 @@ internal static class Program
     private static void IndependentRaycasts()
     {
         var f = new Fixture();
+        f.StartEmptyStage();
         f.Manager.stage_Floor[0] = 1;
         EnqueueProjection(f, (g, c) => g == 0 && c == 0 ? Hit("Block") : (RaycastHit?)null);
         f.Stage.Slide();
@@ -327,6 +394,7 @@ internal static class Program
     private static void OccludedProjection()
     {
         var f = new Fixture();
+        f.StartEmptyStage();
         f.Manager.stage_Floor[0] = 1;
         EnqueueProjectionHits(f, (g, c) => g == 0 && c == 0
             ? new[] { Hit("GhostBlock"), Hit("Floor"), Hit("FixedBlock") } : new RaycastHit[0]);
@@ -337,6 +405,7 @@ internal static class Program
     private static void ProjectionDirections()
     {
         var f = new Fixture();
+        f.StartEmptyStage();
         f.Stage.transform.up = Vector3.forward;
         EnqueueProjection(f, (g, c) => null);
         f.Stage.Slide();
@@ -447,7 +516,7 @@ internal static class Program
         public readonly stage Stage;
         public readonly StageManager Manager;
 
-        public Fixture()
+        public Fixture(Color? authoredFloorColor = null)
         {
             Manager = new GameObject("StageManager").AddComponent<StageManager>();
             Stage = new GameObject("Stage").AddComponent<stage>();
@@ -458,6 +527,8 @@ internal static class Program
             Stage.floor = GridObjects(Vector3.down);
             Stage.wall = GridObjects(Vector3.back);
             Stage.frontwall = GridObjects(Vector3.left);
+            if (authoredFloorColor.HasValue)
+                Stage.floor[26].GetComponent<MeshRenderer>().material.color = authoredFloorColor.Value;
             Stage.Location = Enumerable.Range(0, 7).Select(i =>
             {
                 var location = new GameObject().AddComponent<RectTransform>();
@@ -480,6 +551,13 @@ internal static class Program
                 typeof(stage).GetField("Ghost" + name + "Block").SetValue(Stage, ghostRoot);
             }
             Invoke(Stage, "Awake");
+        }
+
+        public void StartEmptyStage()
+        {
+            Stage.SelectStage(101);
+            Manager.ResetStage();
+            Stage.CallVari();
         }
 
         private static GameObject[] GridObjects(Vector3 up)

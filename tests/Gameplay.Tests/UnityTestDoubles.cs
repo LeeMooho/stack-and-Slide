@@ -189,7 +189,11 @@ namespace UnityEngine
         public static Color black { get { return new Color(0, 0, 0); } }
     }
     public class Material { public Color color = new Color(1, 1, 1); }
-    public class MeshRenderer : Component { public Material material = new Material(); }
+    public class MeshRenderer : Component
+    {
+        public Material material = new Material();
+        public Material sharedMaterial { get { return material; } }
+    }
     public static class Debug
     {
         public static readonly List<string> Messages = new List<string>();

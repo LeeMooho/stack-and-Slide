@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -60,6 +61,10 @@ public class stage : MonoBehaviour
     private int[] stage_FrontWall;
     private StageManager stageManager;
     private Block activeBlock;
+    private readonly List<GameObject> spawnedRoots = new List<GameObject>();
+    private Color[] floorColors;
+    private Color[] wallColors;
+    private Color[] frontWallColors;
 
     private const float MaxDistance = 8f;
 
@@ -68,8 +73,12 @@ public class stage : MonoBehaviour
         playUI.SetActive(false);
         mainMenu.SetActive(true);
         stageManager = GameObject.Find("StageManager").GetComponent<StageManager>();
+        floorColors = CaptureColors(floor);
+        wallColors = CaptureColors(wall);
+        frontWallColors = CaptureColors(frontwall);
         stageManager.ResetStage();
         CallVari();
+        UpdateBlockInventory();
     }
 
     private void UpdateBlockInventory()
@@ -104,6 +113,7 @@ public class stage : MonoBehaviour
             return;
         }
 
+        ResetStageState();
         playUI.SetActive(true);
         mainMenu.SetActive(false);
         stageManager.stage101();
@@ -136,6 +146,60 @@ public class stage : MonoBehaviour
         }
     }
 
+    private static Color[] CaptureColors(GameObject[] cells)
+    {
+        Color[] colors = new Color[cells.Length];
+        for (int i = 0; i < cells.Length; i++)
+        {
+            colors[i] = cells[i].GetComponent<MeshRenderer>().sharedMaterial.color;
+        }
+        return colors;
+    }
+
+    private static void RestoreColors(GameObject[] cells, int[] pattern, Color[] colors)
+    {
+        for (int i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] == 1)
+            {
+                cells[i].GetComponent<MeshRenderer>().material.color = colors[i];
+            }
+        }
+    }
+
+    private void ClearSpawnedObjects()
+    {
+        foreach (GameObject root in spawnedRoots)
+        {
+            if (root != null)
+            {
+                // Destroy is deferred; hide old colliders before another piece can spawn.
+                root.SetActive(false);
+                Destroy(root);
+            }
+        }
+        spawnedRoots.Clear();
+        activeBlock = null;
+        pre_GhostBlock = null;
+    }
+
+    private void ResetStageState()
+    {
+        ClearSpawnedObjects();
+        RestoreColors(floor, stage_Floor, floorColors);
+        RestoreColors(wall, stage_Wall, wallColors);
+        RestoreColors(frontwall, stage_FrontWall, frontWallColors);
+        stageManager.ResetStage();
+        CallVari();
+        isPlaying = false;
+        UpdateBlockInventory();
+    }
+
+    private void OnDestroy()
+    {
+        ClearSpawnedObjects();
+    }
+
     public void GenerateBlock(int blockNumber)
     {
         switch (blockNumber)
@@ -166,7 +230,7 @@ public class stage : MonoBehaviour
 
     private void SpawnBlock(GameObject blockPrefab, GameObject ghostPrefab, Vector3 adjustment, ref int remaining)
     {
-        if (remaining <= 0 || (activeBlock != null && activeBlock.IsActive))
+        if (!isPlaying || remaining <= 0 || (activeBlock != null && activeBlock.IsActive))
         {
             return;
         }
@@ -182,7 +246,9 @@ public class stage : MonoBehaviour
         }
 
         pre_GhostBlock = Instantiate(ghostPrefab, GhostOrigin + adjustment, Quaternion.identity);
+        spawnedRoots.Add(pre_GhostBlock);
         GameObject blockRoot = Instantiate(blockPrefab, Origin + adjustment, Quaternion.identity);
+        spawnedRoots.Add(blockRoot);
         activeBlock = blockRoot.GetComponentInChildren<Block>();
         activeBlock.Initialize(pre_GhostBlock.GetComponentInChildren<GhostBlock>());
         remaining--;
@@ -191,6 +257,11 @@ public class stage : MonoBehaviour
 
     public void Slide()
     {
+        if (!isPlaying)
+        {
+            return;
+        }
+
         int mismatches = CountProjectionMismatches(floor, stage_Floor)
             + CountProjectionMismatches(wall, stage_Wall)
             + CountProjectionMismatches(frontwall, stage_FrontWall);
@@ -229,9 +300,9 @@ public class stage : MonoBehaviour
 
     public void openMainMenu()
     {
+        ResetStageState();
         playUI.SetActive(false);
         mainMenu.SetActive(true);
-        isPlaying = false;
     }
 
     public void CallVari()
