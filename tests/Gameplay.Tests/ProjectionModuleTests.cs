@@ -22,6 +22,7 @@ internal static class ProjectionModuleTests
         run("Physics projection probe ignores ghost and grid hits", UnrelatedHits);
         run("Projection results preserve surface counts and solved status", ResultCounts);
         run("Projection result rejects negative mismatch counts", InvalidResultCounts);
+        run("Projection results preserve optional evaluated-stage context", ResultStageContext);
     }
 
     private static void Equal<T>(T expected, T actual)
@@ -208,6 +209,16 @@ internal static class ProjectionModuleTests
         Throws<ArgumentOutOfRangeException>(() => new ProjectionResult(-1, 0, 0));
         Throws<ArgumentOutOfRangeException>(() => new ProjectionResult(0, -1, 0));
         Throws<ArgumentOutOfRangeException>(() => new ProjectionResult(0, 0, -1));
+    }
+
+    private static void ResultStageContext()
+    {
+        // Standalone callers keep the original three-argument constructor contract.
+        // Stage-aware callers snapshot the evaluated ID instead of reading live state
+        // that an earlier event listener may have advanced to the next puzzle.
+        Equal(0, new ProjectionResult(0, 0, 0).StageNumber);
+        Equal(102, new ProjectionResult(0, 0, 0, 102).StageNumber);
+        Throws<ArgumentOutOfRangeException>(() => new ProjectionResult(0, 0, 0, -1));
     }
 
     private sealed class ScriptedProbe : IProjectionProbe
