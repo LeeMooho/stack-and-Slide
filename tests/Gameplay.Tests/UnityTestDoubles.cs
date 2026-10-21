@@ -61,7 +61,7 @@ namespace UnityEngine
 
     public class MonoBehaviour : Component { public bool enabled = true; }
 
-    public class GameObject : Object
+    public partial class GameObject : Object
     {
         // Registries and exact-type lookup keep the substitute intentionally small.
         // They are not a replacement for Unity's scene or component serialization.
@@ -138,7 +138,7 @@ namespace UnityEngine
         public static GameObject FindGameObjectWithTag(string value) { return FindWithTag(value); }
     }
 
-    public class Transform : Component
+    public partial class Transform : Component
     {
         // Position and up are independent test inputs. This substitute does not derive
         // world transforms from parent matrices or compute quaternion rotations.
@@ -163,7 +163,7 @@ namespace UnityEngine
         public void Rotate(Vector3 delta, Space space) { LastRotation = delta; }
     }
 
-    public class RectTransform : Transform { }
+    public partial class RectTransform : Transform { }
 
     public struct Vector3
     {
@@ -250,9 +250,9 @@ namespace UnityEngine
 
     [AttributeUsage(AttributeTargets.Field)]
     public class RangeAttribute : Attribute { public RangeAttribute(float min, float max) { } }
-    public static class Time { public static float unscaledDeltaTime; }
-    public static class Screen { public static int width = 1920; public static int height = 1080; }
-    public enum TextAnchor { UpperLeft }
+    public static partial class Time { public static float unscaledDeltaTime; public static float unscaledTime; }
+    public static partial class Screen { public static int width = 1920; public static int height = 1080; }
+    public enum TextAnchor { UpperLeft, MiddleCenter }
     public class GUIStyleState { public Color textColor; }
     public class GUIStyle
     {
@@ -262,11 +262,23 @@ namespace UnityEngine
         public int fontSize;
         public GUIStyleState normal = new GUIStyleState();
     }
-    public struct Rect { public Rect(float x, float y, float width, float height) { } }
+    public struct Rect
+    {
+        public float x, y, width, height;
+        public float xMax { get { return x + width; } }
+        public float yMax { get { return y + height; } }
+        public Rect(float x, float y, float width, float height)
+        {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+    }
     public static class GUI { public static void Label(Rect rect, string text, GUIStyle style) { } }
 }
 
 namespace UnityEngine.UI
 {
-    public class Text : UnityEngine.Component { public string text; }
+    public partial class Text : Graphic { public string text; }
 }

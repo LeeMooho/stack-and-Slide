@@ -16,6 +16,7 @@ public sealed class BlockSpawner
     private bool isSpawning;
     private bool isClearing;
     private int generation;
+    private bool inputSuspended;
 
     public bool HasActiveBlock { get { return activeBlock != null && activeBlock.IsActive; } }
     public GameObject CurrentGhost { get; private set; }
@@ -76,6 +77,7 @@ public sealed class BlockSpawner
             if (controller == null || preview == null)
                 throw new InvalidOperationException("The spawned prefab pair is missing its required controllers.");
             controller.Initialize(preview);
+            controller.InputSuspended = inputSuspended;
             if (generation != expectedGeneration)
                 return false;
 
@@ -120,6 +122,13 @@ public sealed class BlockSpawner
     public void CancelPendingSpawn()
     {
         unchecked { generation++; }
+    }
+
+    /// <summary>Suspends owned input while retaining the active-piece spawn guard.</summary>
+    public void SetInputSuspended(bool suspended)
+    {
+        inputSuspended = suspended;
+        if (activeBlock != null) activeBlock.InputSuspended = suspended;
     }
 
     /// <summary>

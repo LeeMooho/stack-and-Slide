@@ -16,6 +16,10 @@ public class Block : MonoBehaviour
     private GhostBlock ghostBlock;
     private bool canMoveUp;
 
+    // Modal UI suspends input without changing ownership. IsActive must stay true so
+    // the spawner still rejects a second moving piece while the drawer is open.
+    public bool InputSuspended { get; set; }
+
     /// <summary>
     /// Allows input only while this enabled controller still owns the moving Block object.
     /// OnFixedBlock is the just-landed state; FixedBlock is a completed support surface.
@@ -73,7 +77,7 @@ public class Block : MonoBehaviour
     /// </summary>
     public void ControlBlock(string type)
     {
-        if (!IsActive)
+        if (!IsActive || InputSuspended)
         {
             return;
         }
