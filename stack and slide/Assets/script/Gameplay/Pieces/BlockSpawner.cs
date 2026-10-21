@@ -14,6 +14,8 @@ public sealed class BlockSpawner
     private readonly List<GameObject> ownedRoots = new List<GameObject>();
     private Block activeBlock;
     private bool isSpawning;
+    private bool isClearing;
+    private int generation;
 
     public bool HasActiveBlock { get { return activeBlock != null && activeBlock.IsActive; } }
     public GameObject CurrentGhost { get; private set; }
@@ -33,7 +35,7 @@ public sealed class BlockSpawner
         if (specification == null)
             throw new ArgumentNullException(nameof(specification));
         specification.ValidatePrefabs();
-        if (isSpawning || HasActiveBlock)
+        if (isSpawning || isClearing || HasActiveBlock)
             return false;
 
         // Instantiate and retirement callbacks can synchronously call back into the
@@ -41,7 +43,7 @@ public sealed class BlockSpawner
         isSpawning = true;
         try
         {
-            return SpawnPair(specification);
+            return SpawnPair(specification, generation);
         }
         finally
         {
@@ -50,46 +52,74 @@ public sealed class BlockSpawner
         }
     }
 
-    private bool SpawnPair(BlockSpec specification)
+    private bool SpawnPair(BlockSpec specification, int expectedGeneration)
     {
         GameObject ghostRoot = null;
         GameObject blockRoot = null;
-        Block controller;
+        bool committed = false;
         try
         {
             // Awake may run synchronously while cloning. The production controllers bind
             // explicitly and no longer perform a global tag lookup from those callbacks.
             ghostRoot = UnityObject.Instantiate(specification.GhostPrefab,
                 ghostOrigin + specification.SpawnOffset, Quaternion.identity);
+            if (generation != expectedGeneration)
+                return false;
+
             blockRoot = UnityObject.Instantiate(specification.BlockPrefab,
                 origin + specification.SpawnOffset, Quaternion.identity);
-            controller = blockRoot.GetComponentInChildren<Block>();
+            if (generation != expectedGeneration)
+                return false;
+
+            Block controller = blockRoot.GetComponentInChildren<Block>();
             GhostBlock preview = ghostRoot.GetComponentInChildren<GhostBlock>();
             if (controller == null || preview == null)
                 throw new InvalidOperationException("The spawned prefab pair is missing its required controllers.");
             controller.Initialize(preview);
+            if (generation != expectedGeneration)
+                return false;
+
+            // Detach the outgoing pair before any OnDisable callback can clear/reload the
+            // session. Clear owns its remaining root snapshot; this method owns oldGhost.
+            Block previousController = activeBlock;
+            GameObject oldGhost = CurrentGhost;
+            activeBlock = null;
+            CurrentGhost = null;
+            ownedRoots.Remove(oldGhost);
+            if (previousController != null)
+                previousController.CompletePlacement();
+            Retire(oldGhost);
+            if (generation != expectedGeneration)
+                return false;
+
+            // Publishing is the last step. A reset anywhere above cancels both staged
+            // roots instead of leaking them into the inventory or ownership of a new session.
+            activeBlock = controller;
+            CurrentGhost = ghostRoot;
+            ownedRoots.Add(ghostRoot);
+            ownedRoots.Add(blockRoot);
+            committed = true;
+            return true;
         }
-        catch
+        finally
         {
-            // Clean only roots returned to this module. Do not search by tag or editor name:
-            // another spawner or unrelated scene object may use exactly the same tags.
-            Retire(blockRoot);
-            Retire(ghostRoot);
-            throw;
+            if (!committed)
+            {
+                // This covers exceptions AND cancellation after synchronous callbacks.
+                // Never look up roots by tag: a new session may already use the same tags.
+                Retire(blockRoot);
+                Retire(ghostRoot);
+            }
         }
+    }
 
-        // Commit the replacement only after both clones exist and bind successfully.
-        // The previous landed block remains valid if definition validation/cloning fails.
-        if (activeBlock != null)
-            activeBlock.CompletePlacement();
-        Retire(CurrentGhost);
-        ownedRoots.Remove(CurrentGhost);
-
-        activeBlock = controller;
-        CurrentGhost = ghostRoot;
-        ownedRoots.Add(ghostRoot);
-        ownedRoots.Add(blockRoot);
-        return true;
+    /// <summary>
+    /// Invalidates work started before a data reload without deleting committed pieces.
+    /// The coordinator can call this when inventory is rebound during a prefab callback.
+    /// </summary>
+    public void CancelPendingSpawn()
+    {
+        unchecked { generation++; }
     }
 
     /// <summary>
@@ -98,11 +128,26 @@ public sealed class BlockSpawner
     /// </summary>
     public void Clear()
     {
-        foreach (GameObject root in ownedRoots)
-            Retire(root);
+        CancelPendingSpawn();
+        if (isClearing)
+            return;
+
+        // SetActive(false) can synchronously enter Clear again. Detach every owned field
+        // and copy the list before callbacks so they cannot mutate an active enumeration.
+        GameObject[] retiringRoots = ownedRoots.ToArray();
         ownedRoots.Clear();
         activeBlock = null;
         CurrentGhost = null;
+        isClearing = true;
+        try
+        {
+            foreach (GameObject root in retiringRoots)
+                Retire(root);
+        }
+        finally
+        {
+            isClearing = false;
+        }
     }
 
     private static void Retire(GameObject root)

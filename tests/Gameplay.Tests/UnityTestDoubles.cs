@@ -26,6 +26,7 @@ namespace UnityEngine
         public static readonly List<Spawn> Spawns = new List<Spawn>();
         public static readonly List<Object> Destroyed = new List<Object>();
         public static Action<GameObject> AfterInstantiate;
+        public static Action<GameObject, bool> AfterSetActive;
         public static GameObject Instantiate(GameObject prefab, Vector3 position, Quaternion rotation)
         {
             // Clone just the hierarchy and component types used by the fixtures.
@@ -125,7 +126,12 @@ namespace UnityEngine
             return clone;
         }
 
-        public void SetActive(bool active) { activeSelf = active; }
+        public void SetActive(bool active)
+        {
+            if (activeSelf == active) return;
+            activeSelf = active;
+            if (AfterSetActive != null) AfterSetActive(this, active);
+        }
         public bool CompareTag(string value) { return tag == value; }
         public static GameObject Find(string value) { return All.Find(x => x.activeSelf && x.name == value); }
         public static GameObject FindWithTag(string value) { return All.Find(x => x.activeSelf && x.tag == value); }

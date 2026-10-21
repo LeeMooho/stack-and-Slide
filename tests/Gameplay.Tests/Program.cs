@@ -78,6 +78,7 @@ internal static class Program
         UObject.Spawns.Clear();
         UObject.Destroyed.Clear();
         UObject.AfterInstantiate = null;
+        UObject.AfterSetActive = null;
         Physics.Results.Clear();
         Physics.AllResults.Clear();
         Physics.Directions.Clear();

@@ -25,6 +25,11 @@ internal static class PieceModuleTests
         run("Spawner clear is idempotent and leaves unrelated roots alone", ClearOwnedRoots);
         run("Edited prefab definitions cannot retire an existing landed pair", RevalidateBeforeReplacement);
         run("Clone failures clean returned roots without replacing the previous pair", FailedCloneRollback);
+        run("Clear during ghost creation cancels and retires the staged root", () => ClearDuringClone(1));
+        run("Clear during block creation cancels and retires both staged roots", () => ClearDuringClone(2));
+        run("Data reload cancels staged work while preserving committed pieces", CancelWithoutClearingCommitted);
+        run("Clear from previous ghost retirement cannot publish the staged pair", ClearDuringGhostRetirement);
+        run("Clear callbacks can reenter safely without mutating root enumeration", ClearReentry);
     }
 
     private static void Equal<T>(T expected, T actual)
@@ -303,6 +308,138 @@ internal static class PieceModuleTests
         Equal(false, oldGhost.activeSelf);
         Equal("FixedBlock", oldController.target.tag);
         spawner.Clear();
+    }
+
+    private static void ClearDuringClone(int cancelAtClone)
+    {
+        var spawner = new BlockSpawner(Vector3.zero, Vector3.zero);
+        int callbacks = 0;
+        UnityObject.AfterInstantiate = clone =>
+        {
+            callbacks++;
+            if (callbacks != cancelAtClone) return;
+            UnityObject.AfterInstantiate = null;
+            spawner.Clear();
+        };
+        try
+        {
+            Equal(false, spawner.TrySpawn(NewSpec(8)));
+        }
+        finally
+        {
+            UnityObject.AfterInstantiate = null;
+        }
+        Equal(cancelAtClone, UnityObject.Spawns.Count);
+        foreach (var spawn in UnityObject.Spawns)
+        {
+            Equal(false, spawn.Clone.activeSelf);
+            Equal(true, UnityObject.Destroyed.Contains(spawn.Clone));
+        }
+        Equal(null, spawner.CurrentGhost);
+        Equal(false, spawner.HasActiveBlock);
+        Equal(true, spawner.TrySpawn(NewSpec(9)));
+        Equal(cancelAtClone + 2, UnityObject.Spawns.Count);
+    }
+
+    private static void CancelWithoutClearingCommitted()
+    {
+        var spawner = new BlockSpawner(Vector3.zero, Vector3.zero);
+        spawner.TrySpawn(NewSpec(1));
+        var oldGhost = spawner.CurrentGhost;
+        var oldPiece = UnityObject.Spawns[1].Clone;
+        var previousController = oldPiece.GetComponentInChildren<Block>();
+        previousController.target.tag = "OnFixedBlock";
+        UnityObject.AfterInstantiate = clone =>
+        {
+            UnityObject.AfterInstantiate = null;
+            spawner.CancelPendingSpawn();
+        };
+        try
+        {
+            Equal(false, spawner.TrySpawn(NewSpec(8)));
+        }
+        finally
+        {
+            UnityObject.AfterInstantiate = null;
+        }
+        Equal(3, UnityObject.Spawns.Count);
+        Equal(oldGhost, spawner.CurrentGhost);
+        Equal(true, oldGhost.activeSelf);
+        Equal(true, oldPiece.activeSelf);
+        Equal("OnFixedBlock", previousController.target.tag);
+        Equal(true, previousController.enabled);
+        Equal(false, UnityObject.Spawns[2].Clone.activeSelf);
+        Equal(true, UnityObject.Destroyed.Contains(UnityObject.Spawns[2].Clone));
+        Equal(true, spawner.TrySpawn(NewSpec(9)));
+        Equal(5, UnityObject.Spawns.Count);
+    }
+
+    private static void ClearDuringGhostRetirement()
+    {
+        var spawner = new BlockSpawner(Vector3.zero, Vector3.zero);
+        spawner.TrySpawn(NewSpec(1));
+        var oldGhost = spawner.CurrentGhost;
+        UnityObject.Spawns[1].Clone.GetComponentInChildren<Block>().target.tag = "OnFixedBlock";
+        bool cleared = false;
+        UnityObject.AfterSetActive = (root, active) =>
+        {
+            if (root != oldGhost || active) return;
+            UnityObject.AfterSetActive = null;
+            // The outgoing pair is detached before this callback; Clear snapshots only
+            // its still-owned roots instead of enumerating a list the spawn then mutates.
+            Equal(null, spawner.CurrentGhost);
+            cleared = true;
+            spawner.Clear();
+        };
+        try
+        {
+            Equal(false, spawner.TrySpawn(NewSpec(8)));
+        }
+        finally
+        {
+            UnityObject.AfterSetActive = null;
+        }
+        Equal(true, cleared);
+        Equal(4, UnityObject.Spawns.Count);
+        foreach (var spawn in UnityObject.Spawns)
+        {
+            Equal(false, spawn.Clone.activeSelf);
+            Equal(true, UnityObject.Destroyed.Contains(spawn.Clone));
+        }
+        Equal(null, spawner.CurrentGhost);
+        Equal(false, spawner.HasActiveBlock);
+        Equal(true, spawner.TrySpawn(NewSpec(9)));
+        Equal(6, UnityObject.Spawns.Count);
+    }
+
+    private static void ClearReentry()
+    {
+        var spawner = new BlockSpawner(Vector3.zero, Vector3.zero);
+        spawner.TrySpawn(NewSpec(1));
+        var next = NewSpec(9);
+        int callbacks = 0;
+        UnityObject.AfterSetActive = (root, active) =>
+        {
+            if (active) return;
+            callbacks++;
+            Equal(null, spawner.CurrentGhost);
+            spawner.Clear();
+            Equal(false, spawner.TrySpawn(next));
+        };
+        try
+        {
+            spawner.Clear();
+        }
+        finally
+        {
+            UnityObject.AfterSetActive = null;
+        }
+        Equal(2, callbacks);
+        Equal(2, UnityObject.Spawns.Count);
+        Equal(null, spawner.CurrentGhost);
+        Equal(false, spawner.HasActiveBlock);
+        Equal(true, spawner.TrySpawn(next));
+        Equal(4, UnityObject.Spawns.Count);
     }
 
     private static BlockSpec NewSpec(int id, Vector3? offset = null)
