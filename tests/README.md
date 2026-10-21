@@ -21,3 +21,10 @@ dotnet run --project tests/Gameplay.Tests
 ```
 
 테스트는 Unity API 대체 객체를 사용해 스테이지 데이터와 게임 로직을 검사합니다. Unity의 에셋 가져오기, 씬 수명 주기, 실제 물리·렌더링과 Android 빌드는 검사하지 않습니다. 변경 후 Unity 에디터의 Play 검증도 필요합니다.
+
+모듈별 테스트는 `StageDataTests`, `PieceModuleTests`, `ProjectionModuleTests`, `InventoryPresenterTests`에 있습니다.
+`StageIntegrationTests`는 새 스테이지·블록 ID가 씬 진입점에서 재고·생성·UI까지 연결되는지,
+잘못된 등록이 기존 세션을 보존하는지, 생성·정리 콜백에서 세션을 바꿨을 때 이전 작업이 취소되는지 검사합니다.
+판정 이벤트는 리스너가 다음 스테이지로 이동한 뒤에도 평가 당시 ID를 보존해야 합니다.
+
+확장할 때의 책임 분리와 에셋 등록 순서는 [영어 모듈 안내](../docs/gameplay-architecture.md)를 참고하세요.
