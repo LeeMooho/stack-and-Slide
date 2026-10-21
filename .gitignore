@@ -19,3 +19,7 @@
 # Standalone regression-test build outputs
 /tests/**/bin/
 /tests/**/obj/
+
+# Python test/validation helpers
+__pycache__/
+*.py[cod]
