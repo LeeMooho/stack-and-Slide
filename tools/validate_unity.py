@@ -17,12 +17,16 @@ import tempfile
 from typing import Any
 
 
+# Copy only project input directories, including current local edits. A previous Library cache must
+# never provide the DLL or import log used as evidence for a new validation run.
 PROJECT_DIRECTORIES = ("Assets", "Packages", "ProjectSettings")
 VERSION_PATTERN = r"\d{4}\.\d+\.\d+[abfp]\d+"
 LOG_VERSION = re.compile(
     rf"(?:Unity Editor version|Initialize engine version)\s*:\s*({VERSION_PATTERN})",
     re.IGNORECASE,
 )
+# A zero editor exit code alone is insufficient: Unity can still record actionable
+# compiler, package, or license failures in its logs. Retain categories for the report.
 ERROR_PATTERNS = {
     "compilation": re.compile(
         r"\berror CS\d+\b|scripts have compiler errors|compilation failed|shader error in",
@@ -57,6 +61,8 @@ def _inside(path: Path, parent: Path) -> bool:
 
 
 def _checkout_root(project: Path) -> Path:
+    # .git may be a directory or a file; either identifies the boundary that must
+    # remain free of generated validation projects and automatic API conversions.
     for path in (project, *project.parents):
         if (path / ".git").exists():
             return path
@@ -64,6 +70,8 @@ def _checkout_root(project: Path) -> Path:
 
 
 def _source_version(project: Path) -> str:
+    # The checked-in version is the original project metadata, not evidence that
+    # this machine has that editor installed or that its gameplay has been tested.
     text = (project / "ProjectSettings" / "ProjectVersion.txt").read_text(encoding="utf-8-sig")
     match = re.search(rf"^m_EditorVersion:\s*({VERSION_PATTERN})\s*$", text, re.MULTILINE)
     if not match:
@@ -74,10 +82,13 @@ def _source_version(project: Path) -> str:
 def _version_key(version: str) -> tuple[int, int, int, int, int]:
     match = re.fullmatch(r"(\d{4})\.(\d+)\.(\d+)([abfp])(\d+)", version)
     major, minor, patch, channel, build = match.groups()
+    # Alpha/beta/final/patch ordering supports downgrade checks, not LTS inference.
     return int(major), int(minor), int(patch), "abfp".index(channel), int(build)
 
 
 def _snapshot(project: Path) -> dict[str, str]:
+    # Relative paths plus content hashes detect additions, removals, and edits.
+    # Modification times would also change during harmless copying or importing.
     result = {}
     for name in PROJECT_DIRECTORIES:
         directory = project / name
@@ -85,6 +96,7 @@ def _snapshot(project: Path) -> dict[str, str]:
             raise ValidationError(f"Required source directory must be a real directory: {directory}")
         for path in sorted(directory.rglob("*")):
             if path.is_symlink():
+                # A linked asset could read outside the intended copy boundary.
                 raise ValidationError(f"Refusing a symlink that could escape the validation copy: {path}")
             if path.is_file():
                 result[path.relative_to(project).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -110,22 +122,30 @@ def _stop_process_tree(process: subprocess.Popen) -> None:
                 pass
     else:
         try:
+            # _run created this group in a new session, so it excludes other Unity
+            # sessions the developer may already have open on the same machine.
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
     if process.poll() is None:
+        # Fallback/reaping concerns only the original Popen handle. Detached children
+        # can escape OS tree/group tracking; the report does not claim they all exited.
         process.kill()
 
 
 def _text(value: bytes | str | None) -> str:
+    # TimeoutExpired may contain bytes even when Popen was configured in text mode.
     return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
 
 
 def _run(command: list[str], output: Path, timeout: int) -> subprocess.CompletedProcess:
     # Keep native output in files rather than echoing possible license/authentication details.
+    # New groups establish ownership for timeout cleanup without matching process names.
     options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
     process = None
     try:
+        # Argument lists preserve executable/project paths with spaces on Windows
+        # without shell expansion. Capture both streams for later error classification.
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    text=True, errors="replace", **options)
         try:
@@ -133,12 +153,15 @@ def _run(command: list[str], output: Path, timeout: int) -> subprocess.Completed
         except subprocess.TimeoutExpired:
             _stop_process_tree(process)
             try:
+                # Drain already-produced diagnostics after requesting termination.
                 stdout, stderr = process.communicate(timeout=5)
             except subprocess.TimeoutExpired as error:
                 # A descendant that deliberately detached on POSIX can retain a pipe handle.
                 # Never let collecting its output defeat the original timeout.
                 stdout, stderr = error.stdout, error.stderr
                 if os.name != "nt":
+                    # Windows communicate uses reader threads; do not close their
+                    # pipe objects concurrently while a detached child retains them.
                     process.stdout.close()
                     process.stderr.close()
                 process.wait(timeout=5)
@@ -147,6 +170,7 @@ def _run(command: list[str], output: Path, timeout: int) -> subprocess.Completed
         output.write_text(_text(stdout) + _text(stderr), encoding="utf-8")
         return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
     finally:
+        # Exceptions during capture must not leave the launched parent running.
         if process is not None and process.poll() is None:
             _stop_process_tree(process)
             process.wait(timeout=5)
@@ -163,6 +187,7 @@ def validate_project(
     editor = editor.expanduser().resolve()
     project = project.expanduser().resolve()
     output_root = output_root.expanduser().resolve()
+    # Resolve paths before enforcing the boundary, including a symlinked output parent.
     if _inside(output_root, _checkout_root(project)):
         raise ValidationError("--output-dir must be outside the source checkout.")
     if not editor.is_file():
@@ -176,6 +201,8 @@ def validate_project(
     work = Path(tempfile.mkdtemp(prefix="unity-validation-", dir=output_root))
     copy = work / "project"
     log_file = work / "import.log"
+    # Start pessimistically and clear failure only after every evidence check passes.
+    # Conversion/import never implies a source migration, Play test, or device build.
     report: dict[str, Any] = {
         "status": "failed",
         "exit_code": 1,
@@ -192,6 +219,8 @@ def validate_project(
         "android_build_validated": False,
     }
     try:
+        # Ask the actual executable instead of guessing from its installation folder
+        # or accepting the version the caller hoped to use as an observed result.
         version_result = _run([str(editor), "-version"], work / "version-output.log", min(timeout, 30))
         report["version_exit_code"] = version_result.returncode
         if version_result.returncode != 0:
@@ -199,6 +228,7 @@ def validate_project(
             raise ValidationError("Unity -version failed; see version-output.log.")
         versions = set(re.findall(rf"\b({VERSION_PATTERN})\b", (version_result.stdout or "") + (version_result.stderr or "")))
         if len(versions) != 1:
+            # Mixed-version output cannot establish which editor should perform import.
             raise ValidationError("Unity -version did not identify exactly one editor version.")
         editor_version = versions.pop()
         report["editor_version"] = editor_version
@@ -211,9 +241,12 @@ def validate_project(
             raise ValidationError("The detected editor is older than the source project; refusing a downgrade.")
 
         copy.mkdir()
+        # Every run starts clean. Existing caches and Git metadata are not inputs,
+        # while package declarations and their lock file remain part of the copy.
         for name in PROJECT_DIRECTORIES:
             shutil.copytree(project / name, copy / name)
 
+        # API updating is intentionally allowed only against the isolated -projectPath.
         command = [str(editor), "-batchmode", "-nographics", "-accept-apiupdate", "-quit",
                    "-projectPath", str(copy), "-logFile", str(log_file)]
         import_result = _run(command, work / "import-output.log", timeout)
@@ -226,6 +259,8 @@ def validate_project(
         log_text = log_file.read_text(encoding="utf-8-sig", errors="replace")
         output_text = (work / "import-output.log").read_text(encoding="utf-8", errors="replace")
         diagnostics = []
+        # Check the editor log and native streams: failures may be present in either.
+        # Report locations/categories rather than copying potentially sensitive lines.
         for name, text in (("import.log", log_text), ("import-output.log", output_text)):
             for number, line in enumerate(text.splitlines(), start=1):
                 for category, pattern in ERROR_PATTERNS.items():
@@ -236,6 +271,8 @@ def validate_project(
             raise ValidationError("Unity reported import/compiler/license/package errors; inspect diagnostic log locations.")
 
         log_versions = set(LOG_VERSION.findall(log_text))
+        # The import must identify the same editor queried above; unrelated or missing
+        # log evidence must not make a nominally successful process look validated.
         if log_versions != {editor_version}:
             raise ValidationError("The import log does not confirm the detected editor version.")
         report["import_version"] = editor_version
@@ -244,6 +281,8 @@ def validate_project(
         if copied_version != editor_version:
             raise ValidationError("Unity did not save a ProjectVersion matching the importing editor.")
         assembly = copy / "Library" / "ScriptAssemblies" / "Assembly-CSharp.dll"
+        # This DLL must be newly produced because no Library directory was copied.
+        # Its presence is compilation evidence, not proof of scene/physics correctness.
         if not assembly.is_file() or assembly.stat().st_size == 0:
             raise ValidationError("The clean import did not produce the gameplay Assembly-CSharp.dll.")
 
@@ -257,6 +296,8 @@ def validate_project(
     except (ValidationError, OSError, ValueError) as error:
         report["error"] = str(error)
     finally:
+        # Even a successful copy import is invalidated if original inputs changed.
+        # Do not auto-restore them: edits may belong to another editor or the user.
         try:
             report["source_unchanged"] = _snapshot(project) == before
         except (OSError, ValidationError):
@@ -266,6 +307,8 @@ def validate_project(
             report["exit_code"] = 1
             report["project_converted_in_copy"] = False
             report["error"] = "Source files changed during validation. Review concurrent changes before retrying."
+        # Persist failures as well as successes, retaining the isolated project and logs
+        # for diagnosis instead of overwriting source files or losing import evidence.
         (work / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return report
 
