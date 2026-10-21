@@ -25,6 +25,7 @@ namespace UnityEngine
         // Recording Destroy does not implement Unity's deferred destruction or fake-null.
         public static readonly List<Spawn> Spawns = new List<Spawn>();
         public static readonly List<Object> Destroyed = new List<Object>();
+        public static Action<GameObject> AfterInstantiate;
         public static GameObject Instantiate(GameObject prefab, Vector3 position, Quaternion rotation)
         {
             // Clone just the hierarchy and component types used by the fixtures.
@@ -33,6 +34,9 @@ namespace UnityEngine
             clone.transform.position = position;
             clone.transform.rotation = rotation;
             Spawns.Add(new Spawn { Prefab = prefab, Clone = clone });
+            // Tests may simulate one synchronous creation callback. This does not attempt
+            // to reproduce Unity's full Awake/OnEnable scheduling or scene lifecycle.
+            if (AfterInstantiate != null) AfterInstantiate(clone);
             return clone;
         }
 

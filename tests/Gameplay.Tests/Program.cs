@@ -60,6 +60,8 @@ internal static class Program
         Run("Down-step landing preserves the half-cell boundary", LandingBoundary);
         ButtonSoundTests.Register(Run);
         StageDataTests.Register(Run);
+        PieceModuleTests.Register(Run);
+        Run("Block registrations reject nonfinite spawn coordinates", InvalidSpawnOffset);
         // A nonzero exit code lets the same executable fail a local command or CI job.
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;
@@ -73,6 +75,7 @@ internal static class Program
         GameObject.All.Clear();
         UObject.Spawns.Clear();
         UObject.Destroyed.Clear();
+        UObject.AfterInstantiate = null;
         Physics.Results.Clear();
         Physics.AllResults.Clear();
         Physics.Directions.Clear();
@@ -101,6 +104,23 @@ internal static class Program
         {
             throw new Exception("Expected " + expected + ", got " + actual);
         }
+    }
+
+    private static void InvalidSpawnOffset()
+    {
+        // No prefab cloning or inventory mutation should precede authoring validation.
+        foreach (var offset in new[] { new Vector3(float.NaN, 0, 0), new Vector3(0, float.PositiveInfinity, 0),
+            new Vector3(0, 0, float.NegativeInfinity) })
+        {
+            try { new BlockSpec(8, null, null, offset); }
+            catch (ArgumentException error)
+            {
+                Equal("spawnOffset", error.ParamName);
+                continue;
+            }
+            throw new Exception("Invalid offset was accepted.");
+        }
+        Equal(0, UObject.Spawns.Count);
     }
 
     private static void Invoke(object target, string method)
