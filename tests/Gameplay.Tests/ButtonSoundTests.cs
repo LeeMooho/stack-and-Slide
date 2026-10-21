@@ -7,6 +7,10 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+/// <summary>
+/// Verifies listener ownership and playback requests using the real sound component.
+/// Audio rendering and Unity's UI event dispatch remain editor/device checks.
+/// </summary>
 internal static class ButtonSoundTests
 {
     public static void Register(Action<string, Action> run)
@@ -21,6 +25,8 @@ internal static class ButtonSoundTests
 
     private static void Invoke(ButtonClickSound sound, string method)
     {
+        // Enable/disable ordering is explicit here; adding a substitute component does
+        // not cause Unity lifecycle events or validate the engine's callback scheduling.
         typeof(ButtonClickSound).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(sound, null);
     }
 
@@ -32,6 +38,7 @@ internal static class ButtonSoundTests
 
     private static ButtonClickSound CreateSound(GameObject go)
     {
+        // Use an isolated source per scenario so a previous click cannot affect counts.
         var sound = go.AddComponent<ButtonClickSound>();
         sound.AudioSource = new GameObject().AddComponent<AudioSource>();
         sound.ClickSound = new AudioClip();
@@ -47,6 +54,8 @@ internal static class ButtonSoundTests
 
     private static void MissingBindings()
     {
+        // Exercise neither binding, source-only, and clip-only states. Missing a clip
+        // must not call PlayOneShot, even when an AudioSource exists.
         var go = new GameObject();
         var button = go.AddComponent<Button>();
         var sound = go.AddComponent<ButtonClickSound>();
@@ -78,6 +87,8 @@ internal static class ButtonSoundTests
         var sound = CreateSound(go);
         for (int i = 0; i < 3; i++)
         {
+            // A disabled component must not keep receiving clicks. Re-enabling must
+            // add exactly one listener rather than accumulating one on every cycle.
             Invoke(sound, "OnEnable");
             button.onClick.Invoke();
             Equal(i + 1, sound.AudioSource.PlayCount);
@@ -89,6 +100,7 @@ internal static class ButtonSoundTests
 
     private static void EventTriggerClick()
     {
+        // Verify the fallback path on an object without a Button, including teardown.
         var go = new GameObject();
         var trigger = go.AddComponent<EventTrigger>();
         var entry = AddClickEntry(trigger);
@@ -106,6 +118,8 @@ internal static class ButtonSoundTests
 
     private static void DuplicateTriggerEntries()
     {
+        // Serialized trigger lists may contain null or duplicate entries. Only the
+        // first matching entry should own this component's sound listener.
         var go = new GameObject();
         var trigger = go.AddComponent<EventTrigger>();
         trigger.triggers.Add(null);
@@ -120,6 +134,8 @@ internal static class ButtonSoundTests
 
     private static void CombinedInput()
     {
+        // Explicitly fire both channels to reproduce the former double-play path.
+        // The component should subscribe to the Button channel only in this setup.
         var go = new GameObject();
         var button = go.AddComponent<Button>();
         var trigger = go.AddComponent<EventTrigger>();
@@ -138,6 +154,7 @@ internal static class ButtonSoundTests
 
 namespace UnityEngine
 {
+    // Track the requested clip and call count instead of loading an audio device.
     public class AudioClip : Object { }
     public class AudioSource : Component
     {
@@ -149,10 +166,13 @@ namespace UnityEngine
 
 namespace UnityEngine.Events
 {
+    // These event substitutes model runtime listeners only, not Unity's persistent
+    // Inspector listeners or engine event propagation through a UI hierarchy.
     public delegate void UnityAction();
     public delegate void UnityAction<T>(T value);
     public class UnityEvent
     {
+        // Invoke a snapshot so callbacks can remove listeners without changing iteration.
         private readonly List<UnityAction> listeners = new List<UnityAction>();
         public void AddListener(UnityAction listener) { listeners.Add(listener); }
         public void RemoveListener(UnityAction listener) { listeners.RemoveAll(x => x == listener); }
@@ -174,6 +194,7 @@ namespace UnityEngine.UI
 
 namespace UnityEngine.EventSystems
 {
+    // Tests select which entry fires; this is not an EventSystem input dispatcher.
     public class BaseEventData { }
     public enum EventTriggerType { PointerClick }
     public class EventTrigger : Component

@@ -7,10 +7,14 @@ namespace UnityEngine
 {
     public class Object
     {
+        // Record requests so tests can assert ownership and whole-root cleanup.
+        // Recording Destroy does not implement Unity's deferred destruction or fake-null.
         public static readonly List<Spawn> Spawns = new List<Spawn>();
         public static readonly List<Object> Destroyed = new List<Object>();
         public static GameObject Instantiate(GameObject prefab, Vector3 position, Quaternion rotation)
         {
+            // Clone just the hierarchy and component types used by the fixtures.
+            // Production Initialize/Bind methods still wire the resulting controller.
             var clone = prefab.Clone();
             clone.transform.position = position;
             clone.transform.rotation = rotation;
@@ -40,6 +44,8 @@ namespace UnityEngine
 
     public class GameObject : Object
     {
+        // Registries and exact-type lookup keep the substitute intentionally small.
+        // They are not a replacement for Unity's scene or component serialization.
         public static readonly List<GameObject> All = new List<GameObject>();
         private readonly Dictionary<Type, Component> components = new Dictionary<Type, Component>();
         public string name;
@@ -57,6 +63,7 @@ namespace UnityEngine
 
         public T AddComponent<T>() where T : Component, new()
         {
+            // Lifecycle callbacks are invoked explicitly by tests, never by this helper.
             var component = new T { gameObject = this };
             components[typeof(T)] = component;
             return component;
@@ -70,6 +77,8 @@ namespace UnityEngine
 
         public T GetComponentInChildren<T>() where T : Component
         {
+            // Search the same child-controller shape as the game's prefabs. Derived
+            // component lookup and all inactive-object rules are outside this substitute.
             T own = GetComponent<T>();
             if (own != null) return own;
             foreach (Transform child in transform.Children)
@@ -83,6 +92,8 @@ namespace UnityEngine
 
         internal GameObject Clone()
         {
+            // Do not copy arbitrary serialized state or schedule callbacks. Tests only
+            // depend on tags, component types and parent/child ownership at this boundary.
             var clone = new GameObject(name + "(Clone)") { tag = tag, activeSelf = activeSelf };
             foreach (var entry in components)
             {
@@ -105,6 +116,8 @@ namespace UnityEngine
 
     public class Transform : Component
     {
+        // Position and up are independent test inputs. This substitute does not derive
+        // world transforms from parent matrices or compute quaternion rotations.
         public Vector3 position;
         public Quaternion rotation;
         private Transform parentValue;
@@ -114,6 +127,7 @@ namespace UnityEngine
             get { return parentValue; }
             set
             {
+                // Maintain traversal links so root and child cleanup can be distinguished.
                 if (parentValue != null) parentValue.Children.Remove(this);
                 parentValue = value;
                 if (value != null) value.Children.Add(this);
@@ -151,6 +165,7 @@ namespace UnityEngine
 
     public static class Physics
     {
+        // Match Unity's default mask value, but never infer collisions from this mask.
         public const int DefaultRaycastLayers = -5;
         public static readonly Queue<RaycastHit?> Results = new Queue<RaycastHit?>();
         public static readonly Queue<RaycastHit[]> AllResults = new Queue<RaycastHit[]>();
@@ -158,9 +173,13 @@ namespace UnityEngine
         public static RaycastHit[] RaycastAll(Vector3 origin, Vector3 direction, float distance,
             int layerMask, QueryTriggerInteraction queryTriggerInteraction)
         {
+            // Playable colliders are triggers too. Enforce the requested query policy
+            // while leaving geometric intersection entirely under each test's control.
             if (queryTriggerInteraction != QueryTriggerInteraction.Collide)
                 throw new InvalidOperationException("Projection must include block trigger colliders.");
             Directions.Add(direction);
+            // An empty queue is an unexpected query, so it must fail rather than
+            // supplying an easy default miss that could conceal a broken call sequence.
             return AllResults.Dequeue();
         }
         public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hit, float distance)
@@ -177,6 +196,8 @@ namespace UnityEngine
     public enum KeyCode { LeftArrow, RightArrow, UpArrow, DownArrow, Z, X, C, A, S }
     public static class Input
     {
+        // A test supplies the keys for one control pass and clears them before the next.
+        // Key repeat, event timing and the platform input backend are not modeled.
         public static readonly HashSet<KeyCode> Keys = new HashSet<KeyCode>();
         public static bool GetKeyDown(KeyCode key) { return Keys.Contains(key); }
         public static bool GetMouseButtonDown(int button) { return false; }
@@ -191,11 +212,14 @@ namespace UnityEngine
     public class Material { public Color color = new Color(1, 1, 1); }
     public class MeshRenderer : Component
     {
+        // Both properties expose one test material. Real shared/instanced material
+        // allocation is an engine concern; these tests only assert color values.
         public Material material = new Material();
         public Material sharedMaterial { get { return material; } }
     }
     public static class Debug
     {
+        // Capture the result message without treating a log as proof of a rendered scene.
         public static readonly List<string> Messages = new List<string>();
         public static void Log(object message) { Messages.Add(message.ToString()); }
     }
@@ -208,6 +232,8 @@ namespace UnityEngine
     public class GUIStyleState { public Color textColor; }
     public class GUIStyle
     {
+        // Minimal display API surface keeps the real FPS script in the compile check;
+        // no GUI drawing or allocation behavior is validated by these fields.
         public TextAnchor alignment;
         public int fontSize;
         public GUIStyleState normal = new GUIStyleState();
