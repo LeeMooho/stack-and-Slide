@@ -1,5 +1,6 @@
 using UnityEngine;
 
+/// <summary>Draws a small diagnostic overlay using smoothed, unscaled frame duration.</summary>
 public class FPSDisplay : MonoBehaviour
 {
     [Range(1, 100)]
@@ -8,6 +9,7 @@ public class FPSDisplay : MonoBehaviour
     private float deltaTime;
     private GUIStyle style;
 
+    /// <summary>Supplies a usable text-size divisor for older scenes that serialized zero.</summary>
     public void Start()
     {
         fFontSize = fFontSize <= 0 ? 50 : fFontSize;
@@ -15,6 +17,8 @@ public class FPSDisplay : MonoBehaviour
 
     private void Update()
     {
+        // Exponential smoothing reduces frame-to-frame flicker. Unscaled time keeps this
+        // diagnostic useful even when gameplay time is slowed or paused with timeScale.
         deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
     }
 
@@ -22,6 +26,8 @@ public class FPSDisplay : MonoBehaviour
     {
         if (style == null)
         {
+            // Create the style in a GUI callback and reuse it across Layout/Repaint events
+            // instead of allocating a new style every time Unity redraws the overlay.
             style = new GUIStyle();
             style.alignment = TextAnchor.UpperLeft;
             style.normal.textColor = new Color(0f, 0f, 0.5f, 1f);

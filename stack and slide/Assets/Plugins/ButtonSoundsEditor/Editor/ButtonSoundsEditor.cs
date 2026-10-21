@@ -9,6 +9,10 @@ using UnityEngine.UI;
 
 namespace Assets.Plugins.ButtonSoundsEditor.Editor
 {
+    /// <summary>
+    /// Configures click sounds on UI objects in loaded scenes, with Undo support for edits.
+    /// Window selection, previews, and repaint events do not themselves modify scene data.
+    /// </summary>
     public class ButtonSoundsEditor : EditorWindow
     {
         private List<GameObject> _candidates = new List<GameObject>();
@@ -32,6 +36,7 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             window.Show();
         }
 
+        /// <summary>Seeds window defaults from existing scene components without editing them.</summary>
         private void Initialize()
         {
             RefreshCandidates();
@@ -54,6 +59,10 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
 
         #endregion
 
+        /// <summary>
+        /// Collects editable scene instances, including inactive UI, while excluding prefab assets.
+        /// Resources.FindObjectsOfTypeAll also sees imported assets, so scene filtering is required.
+        /// </summary>
         private void RefreshCandidates()
         {
             _candidates.Clear();
@@ -73,6 +82,8 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             _eventTriggerCandidates.AddRange(eventTriggers);
 
             Func<GameObject, string> orderByFunc = _ => GetTransformPath(_.transform);
+            // Objects with both input components belong to both filters, but bulk actions
+            // must visit each GameObject once rather than adding/removing its sound twice.
             _candidates = _candidates.Distinct().OrderBy(orderByFunc).ToList();
             _buttonCandidates = _buttonCandidates.OrderBy(orderByFunc).ToList();
             _eventTriggerCandidates = _eventTriggerCandidates.OrderBy(orderByFunc).ToList();
@@ -86,6 +97,10 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             return path;
         }
 
+        /// <summary>
+        /// Draws the immediate-mode editor UI. Unity calls this for Layout and Repaint as
+        /// well as input, so scene dirtying belongs only in handlers that actually mutate data.
+        /// </summary>
         public void OnGUI()
         {
             RefreshCandidates();
@@ -126,6 +141,7 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
         }
 
         
+        /// <summary>Chooses a shared source or creates an undoable scene object on demand.</summary>
         private void DrawAudioSourceSettings()
         {
             if (_audioSource == null)
@@ -140,6 +156,8 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             if (GUILayout.Button(new GUIContent("Create", "Create new AudioSource"), GUILayout.Width(50)))
             {
                 GameObject go = new GameObject("ButtonsAudioSource");
+                // Register creation and component changes with Undo before configuring them.
+                // Dirty the object's actual scene, which may differ in a multi-scene setup.
                 Undo.RegisterCreatedObjectUndo(go, "Create button audio source");
                 AudioSource audioSource = Undo.AddComponent<AudioSource>(go);
                 Undo.RecordObject(audioSource, "Configure button audio source");
@@ -214,6 +232,7 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             return _candidates;
         }
 
+        /// <summary>Edits one component while leaving unchanged fields and previews read-only.</summary>
         private void DrawButtonSettings(GameObject candidate)
         {
             GUILayout.BeginHorizontal();
@@ -234,6 +253,8 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             else
             {
                 AudioClip newClickSound = EditorGUILayout.ObjectField(clickSound.ClickSound, typeof(AudioClip), false, GUILayout.Width(200)) as AudioClip;
+                // ObjectField runs during repaints too. The assignment helper compares old
+                // and new values before recording Undo or marking any scene dirty.
                 AssignClickSound(clickSound, clickSound.AudioSource, newClickSound);
                 if (GUILayout.Button(new GUIContent("X", "Remove 'ButtonClickSound' component from button."), GUILayout.Width(20)))
                 {
@@ -241,6 +262,8 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
                     EditorSceneManager.MarkSceneDirty(candidate.scene);
                     SelectButton(candidate);
                     GUILayout.EndHorizontal();
+                    // DestroyObjectImmediate invalidates the component now. End this row
+                    // without reading its fields, and keep the GUILayout begin/end balanced.
                     return;
                 }
 
@@ -249,6 +272,7 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
                 {
                     if (GUILayout.Button("Fix", GUILayout.Width(50)))
                     {
+                        // Fill missing bindings without replacing a valid per-button override.
                         AssignClickSound(clickSound,
                             clickSound.AudioSource != null ? clickSound.AudioSource : _audioSource,
                             clickSound.ClickSound != null ? clickSound.ClickSound : _clickSound);
@@ -256,6 +280,7 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
                 }
                 else
                 {
+                    // Preview playback changes no serialized fields and creates no Undo entry.
                     if (GUILayout.Button(new GUIContent("Play", "Test assigned AudioClip."), GUILayout.Width(50)))
                     {
                         clickSound.AudioSource.PlayOneShot(clickSound.ClickSound);
@@ -305,6 +330,7 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             _selectedCandidate = candidate;
         }
 
+        /// <summary>Adds an undoable component and applies the window's current defaults.</summary>
         private void AddButtonClickSound(GameObject candidate)
         {
             ButtonClickSound buttonClickSound = Undo.AddComponent<ButtonClickSound>(candidate);
@@ -312,16 +338,23 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
             EditorSceneManager.MarkSceneDirty(candidate.scene);
         }
 
+        /// <summary>Applies both defaults for Add and the explicit bulk assignment action.</summary>
         private void AssignClickSound(ButtonClickSound buttonClickSound)
         {
             AssignClickSound(buttonClickSound, _audioSource, _clickSound);
         }
 
+        /// <summary>
+        /// Records a real property change once, including its prefab-instance override and scene.
+        /// Returning early for equal values is essential because this also runs from OnGUI.
+        /// </summary>
         private void AssignClickSound(ButtonClickSound buttonClickSound, AudioSource audioSource, AudioClip clickSound)
         {
             if (buttonClickSound.AudioSource == audioSource && buttonClickSound.ClickSound == clickSound)
                 return;
 
+            // RecordObject captures the previous values before mutation. Recording prefab
+            // modifications afterwards preserves overrides when an instance is saved.
             Undo.RecordObject(buttonClickSound, "Assign button click sound");
             buttonClickSound.AudioSource = audioSource;
             buttonClickSound.ClickSound = clickSound;
@@ -353,6 +386,7 @@ namespace Assets.Plugins.ButtonSoundsEditor.Editor
 
         #region Bottom panel
 
+        /// <summary>Runs explicit bulk edits over the deduplicated candidate collection.</summary>
         private void DrawBottomPanel()
         {
             GUILayout.BeginHorizontal("Box");
