@@ -1,33 +1,43 @@
-﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-public class FPSDisplay : MonoBehaviour {
 
-	[Range(1, 100)]
-	public int fFontSize;
+/// <summary>Draws a small diagnostic overlay using smoothed, unscaled frame duration.</summary>
+public class FPSDisplay : MonoBehaviour
+{
+    [Range(1, 100)]
+    public int fFontSize;
 
+    private float deltaTime;
+    private GUIStyle style;
 
-    public void Start() {
-		fFontSize = fFontSize == 0 ? 50 : fFontSize;
+    /// <summary>Supplies a usable text-size divisor for older scenes that serialized zero.</summary>
+    public void Start()
+    {
+        fFontSize = fFontSize <= 0 ? 50 : fFontSize;
     }
-    float deltaTime = 0.0f;
 
-	void Update() {
-		deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
-	}
+    private void Update()
+    {
+        // Exponential smoothing reduces frame-to-frame flicker. Unscaled time keeps this
+        // diagnostic useful even when gameplay time is slowed or paused with timeScale.
+        deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
+    }
 
-	void OnGUI() {
-		int w = Screen.width, h = Screen.height;
+    private void OnGUI()
+    {
+        if (style == null)
+        {
+            // Create the style in a GUI callback and reuse it across Layout/Repaint events
+            // instead of allocating a new style every time Unity redraws the overlay.
+            style = new GUIStyle();
+            style.alignment = TextAnchor.UpperLeft;
+            style.normal.textColor = new Color(0f, 0f, 0.5f, 1f);
+        }
 
-		GUIStyle style = new GUIStyle();
-
-		Rect rect = new Rect(0, 0, w, h * 2 / 100);
-		style.alignment = TextAnchor.UpperLeft;
-		style.fontSize = h * 2 / fFontSize;
-		style.normal.textColor = new Color(0.0f, 0.0f, 0.5f, 1.0f);
-		float msec = deltaTime * 1000.0f;
-		float fps = 1.0f / deltaTime;
-		string text = string.Format("{0:0.0} ms ({1:0.} fps)", msec, fps);
-		GUI.Label(rect, text, style);
-	}
+        style.fontSize = Screen.height * 2 / fFontSize;
+        Rect rect = new Rect(0, 0, Screen.width, Screen.height * 2 / 100);
+        float milliseconds = deltaTime * 1000f;
+        float fps = deltaTime > 0f ? 1f / deltaTime : 0f;
+        string text = string.Format("{0:0.0} ms ({1:0.} fps)", milliseconds, fps);
+        GUI.Label(rect, text, style);
+    }
 }

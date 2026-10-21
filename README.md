@@ -4,6 +4,86 @@
 플랫폼: Android <br>
 개발환경: C#, Unity <br>
 
+## 개발 시작
+
+Unity 프로젝트는 `stack and slide/` 폴더입니다. 저장된 에디터 버전은 **2019.4.16f1**입니다.
+설치된 **Unity 6.6**으로 변환할 때는 [업그레이드 검증 안내](docs/unity-upgrade.md)의 복사본 검증 도구를 먼저 사용합니다.
+에디터가 실제로 변환·컴파일한 결과를 확인하기 전까지 원본의 버전과 패키지 잠금 파일을 임의로 바꾸지 않습니다.
+
+1. Unity Hub에서 해당 폴더를 프로젝트로 추가하고 엽니다.
+2. Unity가 패키지를 다운로드하고 에셋을 다시 가져올 때까지 기다립니다.
+3. `Assets/Scenes/stage1_1.unity`를 열고 Console의 컴파일 오류를 확인한 다음 Play를 실행합니다.
+
+다른 Unity 버전으로 열면 패키지와 프로젝트 설정이 변환될 수 있으므로 복사본에서 먼저 확인하세요.
+Android 빌드에는 해당 에디터의 Android Build Support가 추가로 필요합니다. Build Settings에는 게임의 시작 씬인 `Assets/Scenes/stage1_1.unity`가 등록되어 있습니다.
+
+## 저장소에 남기는 파일
+
+`Assets`, `.meta`, `Packages/manifest.json`, `Packages/packages-lock.json`, `ProjectSettings`는 프로젝트 복원에 필요합니다.
+플러그인, TextMesh Pro 리소스, 폰트, 음원도 자동 다운로드를 보장하는 설정이 없으므로 유지합니다.
+
+`Library`, `Temp`, `obj`, `Logs`, 빌드 결과, IDE 캐시와 Unity가 생성한 `.csproj`·`.sln`은 제외합니다.
+Unity가 프로젝트를 다시 가져오면 캐시를 생성하며, IDE 프로젝트 파일은 Unity Preferences의 External Tools에서 Regenerate project files로 다시 만들 수 있습니다.
+
+## 게임 코드
+
+- `StageManager.cs`: 스테이지 정의 조회와 기존 데이터 필드 호환.
+- `stage.cs`: 기존 씬·버튼 연결을 유지하는 모듈 조립과 플레이 세션 관리.
+- `Gameplay/Data`: 스테이지 에셋과 검증된 데이터 스냅샷.
+- `Gameplay/Pieces`: 블록 에셋·카탈로그·재고·생성 및 정리.
+- `Gameplay/Board`: 투영 격자, 교체 가능한 물리 조회, 판정 결과.
+- `Gameplay/Presentation`: 블록 ID와 재고 UI 연결 및 표시.
+- `Block.cs`: 블록 이동·회전·착지 처리.
+- `GhostBlock.cs`: 착지 위치 미리보기.
+- `FPSDisplay.cs`: 프레임 시간과 FPS 표시.
+
+씬과 프리팹에서 사용하는 공개 필드·메서드 이름과 스크립트 GUID를 유지합니다.
+투영 판정은 `Block`, `OnFixedBlock`, `FixedBlock` 태그를 블록으로 취급하며, 필수 칸의 누락과 빈 칸의 추가 블록을 모두 검사합니다.
+판정 레이는 각 격자 면의 안쪽으로 발사하며 고스트·격자 충돌체에 가려진 블록도 검사합니다.
+한 번에 하나의 블록을 조작하고, 스테이지 재시작·메뉴 복귀 시 생성한 오브젝트와 재고·격자 색을 초기화합니다.
+
+새 스테이지와 블록은 `StageDefinition`·`BlockDefinition` 에셋 및 UI 바인딩으로 등록할 수 있습니다.
+점수·진행도 기능은 평가 당시 스테이지 ID가 포함된 `PuzzleEvaluated` 이벤트를 구독합니다.
+구체적인 등록 순서와 확장 예제는 영어로 작성한 [모듈 구조 안내](docs/gameplay-architecture.md)에 있습니다.
+
+## 플레이 피드백과 업적
+
+기존 씬을 실행하면 새 HUD가 자동으로 연결됩니다.
+
+- 타이머·판정 횟수·사용 블록 수·최고 점수·별 등급을 표시합니다.
+- 판정한 격자에서 누락·초과·일치 칸을 구분하고 면별 오류 수와 색상 설명을 제공합니다.
+- 첫 클리어 축하 효과, 개선 콤보, 로컬 저장 업적 6개를 추가했습니다.
+- 힌트·고대비·모션 줄이기 설정과 업적 패널을 제공합니다.
+- 메뉴에서 짧은 도전 **Warm-up I (102)**, **Flat square (103)** 및 기존 **Original tower (101)**를 선택합니다.
+
+반복 판정은 보상을 중복 지급하지 않으며, XP는 스테이지별 최고 점수 합계로 계산합니다.
+업적 패널을 열면 블록 입력이 잠기고 타이머는 계속 진행합니다.
+규칙·저장 위치·확장 방법은 영어 [플레이 경험 안내](docs/player-experience.md),
+도전 스테이지의 목표 배치와 조작 경로는 [배치 검증 안내](docs/challenge-layouts.md)에 있습니다.
+
+## 회귀 테스트
+
+.NET 8 SDK와 Python 3가 있는 환경에서 저장소 루트 기준으로 실행합니다. 자세한 Windows·클라우드 실행법은 [테스트 안내](tests/README.md)에 있습니다.
+
+```sh
+python3 tests/run_gameplay_tests.py
+```
+
+실제 게임 소스를 C# 7.3 문법으로 컴파일하며 스테이지 데이터, 재고 UI, 7종 블록 생성 위치,
+재고 소진, 재시작, 투영 판정, 이동·회전·착지, 사운드 리스너를 검사합니다.
+새 스테이지·블록 ID 등록, 잘못된 확장 설정의 기존 세션 보존, 생성 콜백 중 메뉴 복귀·스테이지 전환도 검사합니다.
+실패하면 실패 종료 코드를 반환합니다.
+PR과 `master` 변경 시 GitHub Actions가 같은 독립 테스트를 실행합니다.
+
+Unity 검증 도구의 원본 격리·오류 처리와 실제 씬·프리팹 데이터에 기반한 도전 배치를 함께 검사합니다.
+
+```sh
+python3 -m unittest discover -s tools -p 'test_*.py' -v
+```
+
+이 테스트는 Unity API를 대체한 독립 로직 테스트입니다. 에셋 가져오기, Unity의 수명 주기·물리·렌더링,
+Android 빌드를 검증하지 않으므로 Unity 에디터에서 Play 검증도 필요합니다.
+
 플레이스토어
 https://play.google.com/store/apps/details?id=happynoon.StackandSlide&pcampaignid=web_share
 
