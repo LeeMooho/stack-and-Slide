@@ -46,6 +46,8 @@ internal static class Program
         Run("A missing ghost does not cause a null-reference exception", MissingGhost);
         Run("A ghost without an active block tolerates lifecycle callbacks", MissingActiveBlock);
         Run("Ghost rotation resets offsets and follows the current target", GhostMovement);
+        Run("Ghost landing selects the nearest support behind unrelated hits", NearestSupport);
+        Run("Losing support invalidates the previous ghost landing point", LostSupport);
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;
     }
@@ -314,7 +316,7 @@ internal static class Program
         var ghost = new GameObject().AddComponent<GhostBlock>();
         ghost.transform.parent = new GameObject().transform;
         owner.Initialize(ghost);
-        Physics.Results.Enqueue(Hit("Floor"));
+        Physics.AllResults.Enqueue(new[] { Hit("Floor") });
         Invoke(ghost, "Update");
         Equal(owner.gameObject, ghost.cBlock);
         Equal(new Vector3(3, 3, 1), ghost.transform.parent.position);
@@ -470,9 +472,13 @@ internal static class Program
     {
         var block = ActiveBlock();
         var ghost = new GameObject { tag = "GhostBlock" }.AddComponent<GhostBlock>();
-        ghost.distanceY = 1f;
         ghost.AdjustY = new Vector3(0, .75f, 0);
+        ghost.transform.parent = new GameObject().transform;
         block.Initialize(ghost);
+        var floorHit = Hit("Floor");
+        floorHit.distance = 1f;
+        Physics.AllResults.Enqueue(new[] { floorHit });
+        Invoke(ghost, "Update");
         block.CheckValid();
         Equal("OnFixedBlock", block.gameObject.tag);
         Equal(new Vector3(0, .25f, 0), block.transform.parent.position);
@@ -502,13 +508,48 @@ internal static class Program
         ghost.AdjustY = Vector3.up;
         ghost.pre_AdjustY = Vector3.up;
         block.Initialize(ghost);
-        Physics.Results.Enqueue(Hit("Floor"));
+        Physics.AllResults.Enqueue(new[] { Hit("Floor") });
         Invoke(ghost, "Update");
         Equal(false, block.BlockRotation);
         Equal(Vector3.zero, ghost.AdjustY);
         Equal(Vector3.zero, ghost.pre_AdjustY);
         Equal(2f, ghost.distanceY);
         Equal(new Vector3(1, 2, 2), ghost.transform.parent.position);
+    }
+
+    private static void NearestSupport()
+    {
+        var block = ActiveBlock();
+        block.transform.parent.position = new Vector3(1, 4, 2);
+        var ghost = new GameObject().AddComponent<GhostBlock>();
+        ghost.transform.parent = new GameObject().transform;
+        block.Initialize(ghost);
+        var distant = Hit("Floor");
+        distant.distance = 5f;
+        var nearer = Hit("FixedBlock");
+        nearer.distance = 3f;
+        Physics.AllResults.Enqueue(new[] { Hit("GhostBlock"), distant, nearer, Hit("Block") });
+        Invoke(ghost, "Update");
+        Equal(true, ghost.HasLandingPoint);
+        Equal(3f, ghost.distanceY);
+        Equal(new Vector3(1, 1, 2), ghost.transform.parent.position);
+    }
+
+    private static void LostSupport()
+    {
+        var block = ActiveBlock();
+        var ghost = new GameObject().AddComponent<GhostBlock>();
+        ghost.transform.parent = new GameObject().transform;
+        block.Initialize(ghost);
+        Physics.AllResults.Enqueue(new[] { Hit("Floor") });
+        Invoke(ghost, "Update");
+        Equal(true, ghost.HasLandingPoint);
+        Physics.AllResults.Enqueue(new RaycastHit[0]);
+        Invoke(ghost, "Update");
+        Equal(false, ghost.HasLandingPoint);
+        Equal(0f, ghost.distanceY);
+        block.CheckValid();
+        Equal("Block", block.gameObject.tag);
     }
 
     private sealed class Fixture

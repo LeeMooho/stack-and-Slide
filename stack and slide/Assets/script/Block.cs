@@ -112,7 +112,7 @@ public class Block : MonoBehaviour
 
     public void CheckValid()
     {
-        if (!IsActive || ghostBlock == null)
+        if (!IsActive || ghostBlock == null || !ghostBlock.HasLandingPoint)
         {
             return;
         }

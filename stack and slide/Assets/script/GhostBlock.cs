@@ -7,6 +7,7 @@ public class GhostBlock : MonoBehaviour
     public bool OnInsideY;
     public Vector3 AdjustY;
     public Vector3 pre_AdjustY;
+    public bool HasLandingPoint { get; private set; }
 
     private Vector3 maxY;
     private Block block;
@@ -20,6 +21,7 @@ public class GhostBlock : MonoBehaviour
     {
         block = controller;
         cBlock = controller != null ? controller.gameObject : null;
+        HasLandingPoint = false;
     }
 
     private void OnTriggerStay(Collider other)
@@ -29,7 +31,7 @@ public class GhostBlock : MonoBehaviour
             Destroy(gameObject);
         }
 
-        if (cBlock != null && (other.CompareTag("FixedBlock") || other.CompareTag("Floor")))
+        if (cBlock != null && HasLandingPoint && (other.CompareTag("FixedBlock") || other.CompareTag("Floor")))
         {
             OnInsideY = true;
             AdjustY += new Vector3(0, 0.1f, 0);
@@ -50,6 +52,7 @@ public class GhostBlock : MonoBehaviour
     {
         if (block == null || !block.IsActive)
         {
+            HasLandingPoint = false;
             return;
         }
 
@@ -66,15 +69,31 @@ public class GhostBlock : MonoBehaviour
             return;
         }
 
-        RaycastHit hit;
-        if (Physics.Raycast(cBlock.transform.position, Vector3.down, out hit, 20f)
-            && (hit.collider.CompareTag("Floor") || hit.collider.CompareTag("FixedBlock")))
+        HasLandingPoint = false;
+        float nearestDistance = float.PositiveInfinity;
+        RaycastHit[] hits = Physics.RaycastAll(cBlock.transform.position, Vector3.down, 20f,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+        foreach (RaycastHit hit in hits)
         {
-            distanceY = hit.distance;
-            maxY = new Vector3(0, distanceY, 0);
+            if ((hit.collider.CompareTag("Floor") || hit.collider.CompareTag("FixedBlock"))
+                && hit.distance < nearestDistance)
+            {
+                nearestDistance = hit.distance;
+                HasLandingPoint = true;
+            }
         }
 
         transform.parent.rotation = cBlock.transform.parent.rotation;
+        if (!HasLandingPoint)
+        {
+            distanceY = 0f;
+            maxY = Vector3.zero;
+            transform.parent.position = cBlock.transform.parent.position;
+            return;
+        }
+
+        distanceY = nearestDistance;
+        maxY = Vector3.up * distanceY;
         if (!OnInsideY)
         {
             transform.parent.position = cBlock.transform.parent.position + pre_AdjustY - maxY;
