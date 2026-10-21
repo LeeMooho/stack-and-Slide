@@ -59,6 +59,7 @@ public class stage : MonoBehaviour
     private int[] stage_Wall;
     private int[] stage_FrontWall;
     private StageManager stageManager;
+    private Block activeBlock;
 
     private const float MaxDistance = 8f;
 
@@ -165,14 +166,25 @@ public class stage : MonoBehaviour
 
     private void SpawnBlock(GameObject blockPrefab, GameObject ghostPrefab, Vector3 adjustment, ref int remaining)
     {
-        if (remaining <= 0)
+        if (remaining <= 0 || (activeBlock != null && activeBlock.IsActive))
         {
             return;
         }
 
-        // The ghost must exist before the playable block's lifecycle callbacks.
+        if (activeBlock != null)
+        {
+            activeBlock.CompletePlacement();
+        }
+        if (pre_GhostBlock != null)
+        {
+            pre_GhostBlock.SetActive(false);
+            Destroy(pre_GhostBlock);
+        }
+
         pre_GhostBlock = Instantiate(ghostPrefab, GhostOrigin + adjustment, Quaternion.identity);
-        Instantiate(blockPrefab, Origin + adjustment, Quaternion.identity);
+        GameObject blockRoot = Instantiate(blockPrefab, Origin + adjustment, Quaternion.identity);
+        activeBlock = blockRoot.GetComponentInChildren<Block>();
+        activeBlock.Initialize(pre_GhostBlock.GetComponentInChildren<GhostBlock>());
         remaining--;
         UpdateBlockInventory();
     }

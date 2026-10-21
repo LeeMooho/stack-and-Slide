@@ -8,17 +8,17 @@ namespace UnityEngine
     public class Object
     {
         public static readonly List<Spawn> Spawns = new List<Spawn>();
+        public static readonly List<Object> Destroyed = new List<Object>();
         public static GameObject Instantiate(GameObject prefab, Vector3 position, Quaternion rotation)
         {
-            var clone = new GameObject(prefab.name + "(Clone)");
-            clone.tag = prefab.tag;
+            var clone = prefab.Clone();
             clone.transform.position = position;
             clone.transform.rotation = rotation;
             Spawns.Add(new Spawn { Prefab = prefab, Clone = clone });
             return clone;
         }
 
-        public static void Destroy(Object value) { }
+        public static void Destroy(Object value) { Destroyed.Add(value); }
     }
 
     public class Spawn
@@ -32,10 +32,11 @@ namespace UnityEngine
         public GameObject gameObject;
         public Transform transform { get { return gameObject.transform; } }
         public T GetComponent<T>() where T : Component { return gameObject.GetComponent<T>(); }
+        public T GetComponentInChildren<T>() where T : Component { return gameObject.GetComponentInChildren<T>(); }
         public bool CompareTag(string tag) { return gameObject.CompareTag(tag); }
     }
 
-    public class MonoBehaviour : Component { }
+    public class MonoBehaviour : Component { public bool enabled = true; }
 
     public class GameObject : Object
     {
@@ -67,6 +68,34 @@ namespace UnityEngine
             return components.TryGetValue(typeof(T), out component) ? (T)component : null;
         }
 
+        public T GetComponentInChildren<T>() where T : Component
+        {
+            T own = GetComponent<T>();
+            if (own != null) return own;
+            foreach (Transform child in transform.Children)
+            {
+                if (!child.gameObject.activeSelf) continue;
+                T found = child.gameObject.GetComponentInChildren<T>();
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        internal GameObject Clone()
+        {
+            var clone = new GameObject(name + "(Clone)") { tag = tag, activeSelf = activeSelf };
+            foreach (var entry in components)
+            {
+                if (entry.Key == typeof(Transform)) continue;
+                var component = (Component)Activator.CreateInstance(entry.Key);
+                component.gameObject = clone;
+                clone.components[entry.Key] = component;
+            }
+            foreach (Transform child in transform.Children)
+                child.gameObject.Clone().transform.parent = clone.transform;
+            return clone;
+        }
+
         public void SetActive(bool active) { activeSelf = active; }
         public bool CompareTag(string value) { return tag == value; }
         public static GameObject Find(string value) { return All.Find(x => x.activeSelf && x.name == value); }
@@ -78,7 +107,18 @@ namespace UnityEngine
     {
         public Vector3 position;
         public Quaternion rotation;
-        public Transform parent;
+        private Transform parentValue;
+        public readonly List<Transform> Children = new List<Transform>();
+        public Transform parent
+        {
+            get { return parentValue; }
+            set
+            {
+                if (parentValue != null) parentValue.Children.Remove(this);
+                parentValue = value;
+                if (value != null) value.Children.Add(this);
+            }
+        }
         public Vector3 up = Vector3.up;
         public Vector3 LastRotation;
         public void Translate(Vector3 delta, Space space) { position += delta; }

@@ -16,13 +16,10 @@ public class GhostBlock : MonoBehaviour
         OnInsideY = false;
     }
 
-    private void Start()
+    public void Bind(Block controller)
     {
-        GameObject activeBlock = GameObject.FindWithTag("Block");
-        if (activeBlock != null)
-        {
-            block = activeBlock.GetComponent<Block>();
-        }
+        block = controller;
+        cBlock = controller != null ? controller.gameObject : null;
     }
 
     private void OnTriggerStay(Collider other)
@@ -51,7 +48,7 @@ public class GhostBlock : MonoBehaviour
 
     private void Update()
     {
-        if (block == null)
+        if (block == null || !block.IsActive)
         {
             return;
         }

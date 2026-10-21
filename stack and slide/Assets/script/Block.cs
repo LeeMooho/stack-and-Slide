@@ -12,29 +12,48 @@ public class Block : MonoBehaviour
     private GhostBlock ghostBlock;
     private bool canMoveUp;
 
+    public bool IsActive
+    {
+        get { return enabled && target == gameObject && target != null && target.CompareTag("Block"); }
+    }
+
+    private void Awake()
+    {
+        target = gameObject;
+    }
+
+    public void Initialize(GhostBlock preview)
+    {
+        target = gameObject;
+        ghostBlock = preview;
+        if (preview != null)
+        {
+            preview.Bind(this);
+        }
+    }
+
+    public void CompletePlacement()
+    {
+        if (target != null && target.CompareTag("OnFixedBlock"))
+        {
+            target.tag = "FixedBlock";
+            enabled = false;
+        }
+    }
+
     private void Update()
     {
-        if (Input.GetMouseButtonDown(0) || target == null || target.CompareTag("OnFixedBlock"))
+        if (!IsActive)
         {
-            target = GameObject.FindGameObjectWithTag("Block");
+            return;
         }
 
         ControlBlock(null);
-
-        if (target != null && target.CompareTag("Block"))
-        {
-            preTarget = GameObject.FindGameObjectWithTag("OnFixedBlock");
-            if (preTarget != null)
-            {
-                preTarget.tag = "FixedBlock";
-                Destroy(this);
-            }
-        }
     }
 
     public void ControlBlock(string type)
     {
-        if (target == null || !target.CompareTag("Block"))
+        if (!IsActive)
         {
             return;
         }
@@ -93,23 +112,7 @@ public class Block : MonoBehaviour
 
     public void CheckValid()
     {
-        if (target == null)
-        {
-            return;
-        }
-
-        if (ghostBlock == null)
-        {
-            GameObject ghost = GameObject.FindGameObjectWithTag("GhostBlock");
-            if (ghost == null)
-            {
-                return;
-            }
-
-            ghostBlock = ghost.GetComponent<GhostBlock>();
-        }
-
-        if (ghostBlock == null)
+        if (!IsActive || ghostBlock == null)
         {
             return;
         }
@@ -124,7 +127,7 @@ public class Block : MonoBehaviour
 
     private void OnTriggerStay(Collider other)
     {
-        if (!other.CompareTag("Floor") && !other.CompareTag("FixedBlock"))
+        if (!IsActive || (!other.CompareTag("Floor") && !other.CompareTag("FixedBlock")))
         {
             return;
         }

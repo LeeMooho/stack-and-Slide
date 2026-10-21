@@ -23,6 +23,11 @@ internal static class Program
         }
         Run("Empty inventory cannot spawn or become negative", EmptyInventory);
         Run("Unknown block IDs do not spawn or consume inventory", UnknownBlock);
+        Run("A moving block prevents consuming a second inventory item", ConcurrentSpawn);
+        Run("The next spawn finalizes the previous block and retires its ghost root", NextBlock);
+        Run("Controllers keep their owners when the old block updates first", () => ControllerOwnership(false));
+        Run("Controllers keep their owners when the new block updates first", () => ControllerOwnership(true));
+        Run("A ghost follows its explicitly bound block", BoundGhost);
         Run("Exact projection accepts active, newly fixed and fixed blocks", MatchingProjection);
         Run("A missing required block fails the projection", MissingProjection);
         Run("An unexpected block fails the projection", UnexpectedProjection);
@@ -46,6 +51,7 @@ internal static class Program
         total++;
         GameObject.All.Clear();
         UObject.Spawns.Clear();
+        UObject.Destroyed.Clear();
         Physics.Results.Clear();
         Physics.AllResults.Clear();
         Physics.Directions.Clear();
@@ -188,6 +194,66 @@ internal static class Program
         f.Stage.GenerateBlock(8);
         Equal(0, UObject.Spawns.Count);
         Equal(1, f.Stage.A1Number);
+    }
+
+    private static void ConcurrentSpawn()
+    {
+        var f = new Fixture();
+        f.Stage.SelectStage(101);
+        f.Stage.GenerateBlock(1);
+        f.Stage.GenerateBlock(2);
+        Equal(2, UObject.Spawns.Count);
+        Equal(true, f.Stage.A2Image.activeSelf);
+        Equal("1", f.Stage.A2Text.text);
+    }
+
+    private static void NextBlock()
+    {
+        var f = new Fixture();
+        f.Stage.SelectStage(101);
+        f.Stage.GenerateBlock(1);
+        var previousGhost = f.Stage.pre_GhostBlock;
+        var previousBlock = UObject.Spawns[1].Clone.GetComponentInChildren<Block>();
+        previousBlock.target.tag = "OnFixedBlock";
+        f.Stage.GenerateBlock(2);
+        Equal(4, UObject.Spawns.Count);
+        Equal("FixedBlock", previousBlock.target.tag);
+        Equal(false, previousBlock.enabled);
+        Equal(false, previousGhost.activeSelf);
+        Equal(true, UObject.Destroyed.Contains(previousGhost));
+        var current = UObject.Spawns[3].Clone.GetComponentInChildren<Block>();
+        Equal(current.gameObject, f.Stage.pre_GhostBlock.GetComponentInChildren<GhostBlock>().cBlock);
+    }
+
+    private static void ControllerOwnership(bool newFirst)
+    {
+        var previous = ActiveBlock();
+        previous.gameObject.tag = "OnFixedBlock";
+        var current = ActiveBlock();
+        current.Initialize(null);
+        Input.Keys.Add(KeyCode.LeftArrow);
+        Invoke(newFirst ? current : previous, "Update");
+        Invoke(newFirst ? previous : current, "Update");
+        Equal(Vector3.zero, previous.transform.parent.position);
+        Equal(Vector3.right * .5f, current.transform.parent.position);
+        Equal(previous.gameObject, previous.target);
+        Equal(current.gameObject, current.target);
+        Equal(true, current.enabled);
+        Equal(false, UObject.Destroyed.Contains(current));
+    }
+
+    private static void BoundGhost()
+    {
+        ActiveBlock();
+        var owner = ActiveBlock();
+        owner.transform.parent.position = new Vector3(3, 5, 1);
+        var ghost = new GameObject().AddComponent<GhostBlock>();
+        ghost.transform.parent = new GameObject().transform;
+        owner.Initialize(ghost);
+        Physics.Results.Enqueue(Hit("Floor"));
+        Invoke(ghost, "Update");
+        Equal(owner.gameObject, ghost.cBlock);
+        Equal(new Vector3(3, 3, 1), ghost.transform.parent.position);
     }
 
     private static void EnqueueProjection(Fixture f, Func<int, int, RaycastHit?> result)
@@ -337,6 +403,7 @@ internal static class Program
         var ghost = new GameObject { tag = "GhostBlock" }.AddComponent<GhostBlock>();
         ghost.distanceY = 1f;
         ghost.AdjustY = new Vector3(0, .75f, 0);
+        block.Initialize(ghost);
         block.CheckValid();
         Equal("OnFixedBlock", block.gameObject.tag);
         Equal(new Vector3(0, .25f, 0), block.transform.parent.position);
@@ -352,7 +419,6 @@ internal static class Program
     private static void MissingActiveBlock()
     {
         var ghost = new GameObject().AddComponent<GhostBlock>();
-        Invoke(ghost, "Start");
         Invoke(ghost, "Update");
         Equal(null, ghost.cBlock);
     }
@@ -366,7 +432,7 @@ internal static class Program
         ghost.transform.parent = new GameObject().transform;
         ghost.AdjustY = Vector3.up;
         ghost.pre_AdjustY = Vector3.up;
-        Invoke(ghost, "Start");
+        block.Initialize(ghost);
         Physics.Results.Enqueue(Hit("Floor"));
         Invoke(ghost, "Update");
         Equal(false, block.BlockRotation);
@@ -402,8 +468,16 @@ internal static class Program
             {
                 typeof(stage).GetField(name + "Image").SetValue(Stage, new GameObject());
                 typeof(stage).GetField(name + "Text").SetValue(Stage, new GameObject().AddComponent<Text>());
-                typeof(stage).GetField(name + "Block").SetValue(Stage, new GameObject(name));
-                typeof(stage).GetField("Ghost" + name + "Block").SetValue(Stage, new GameObject("Ghost" + name));
+                var blockRoot = new GameObject(name);
+                var blockChild = new GameObject { tag = "Block" };
+                blockChild.transform.parent = blockRoot.transform;
+                blockChild.AddComponent<Block>();
+                var ghostRoot = new GameObject("Ghost" + name);
+                var ghostChild = new GameObject { tag = "GhostBlock" };
+                ghostChild.transform.parent = ghostRoot.transform;
+                ghostChild.AddComponent<GhostBlock>();
+                typeof(stage).GetField(name + "Block").SetValue(Stage, blockRoot);
+                typeof(stage).GetField("Ghost" + name + "Block").SetValue(Stage, ghostRoot);
             }
             Invoke(Stage, "Awake");
         }
