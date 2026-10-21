@@ -48,6 +48,7 @@ internal static class Program
         Run("Ghost rotation resets offsets and follows the current target", GhostMovement);
         Run("Ghost landing selects the nearest support behind unrelated hits", NearestSupport);
         Run("Losing support invalidates the previous ghost landing point", LostSupport);
+        ButtonSoundTests.Register(Run);
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;
     }

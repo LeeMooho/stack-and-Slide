@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../stack and slide/Assets/script/*.cs" Link="Gameplay/%(Filename)%(Extension)" />
+    <Compile Include="../../stack and slide/Assets/Plugins/ButtonSoundsEditor/ButtonClickSound.cs" Link="Plugins/ButtonClickSound.cs" />
   </ItemGroup>
 </Project>

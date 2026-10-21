@@ -10,26 +10,47 @@ namespace Assets.Plugins.ButtonSoundsEditor
         public AudioSource AudioSource;
         public AudioClip ClickSound;
 
-        public void Awake()
+        private Button _button;
+        private EventTrigger.Entry _clickEntry;
+
+        private void OnEnable()
         {
-            Button button = GetComponent<Button>();
-            if (button != null)
+            _button = GetComponent<Button>();
+            if (_button != null)
             {
-                button.onClick.AddListener(PlayClickSound);
+                _button.onClick.AddListener(PlayClickSound);
+                return;
             }
 
             EventTrigger eventTrigger = GetComponent<EventTrigger>();
             if (eventTrigger != null)
             {
-                EventTrigger.Entry clickEntry = eventTrigger.triggers.SingleOrDefault(_ => _.eventID == EventTriggerType.PointerClick);
-                if (clickEntry != null)
-                    clickEntry.callback.AddListener(_ => PlayClickSound());
+                _clickEntry = eventTrigger.triggers.FirstOrDefault(_ => _ != null && _.eventID == EventTriggerType.PointerClick);
+                if (_clickEntry != null)
+                    _clickEntry.callback.AddListener(OnPointerClick);
             }
+        }
+
+        private void OnDisable()
+        {
+            if (_button != null)
+                _button.onClick.RemoveListener(PlayClickSound);
+            if (_clickEntry != null)
+                _clickEntry.callback.RemoveListener(OnPointerClick);
+
+            _button = null;
+            _clickEntry = null;
+        }
+
+        private void OnPointerClick(BaseEventData eventData)
+        {
+            PlayClickSound();
         }
 
         private void PlayClickSound()
         {
-            AudioSource.PlayOneShot(ClickSound);
+            if (AudioSource != null && ClickSound != null)
+                AudioSource.PlayOneShot(ClickSound);
         }
     }
 
