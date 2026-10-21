@@ -75,6 +75,43 @@ public sealed class ProjectionGrid
     }
 
     /// <summary>
+    /// Paints feedback from an immutable evaluation without issuing another physics query.
+    /// Pair these colors with text labels or counts in the view, so a player need not
+    /// distinguish colors alone to understand what is missing or unexpectedly occupied.
+    /// </summary>
+    public void ShowFeedback(ProjectionSurfaceResult result, bool highContrast = false)
+    {
+        if (result == null)
+        {
+            throw new ArgumentNullException("result");
+        }
+        if (result.CellCount != cells.Length)
+        {
+            throw new ArgumentException("Feedback size must match the projection grid.", "result");
+        }
+
+        for (int i = 0; i < cells.Length; i++)
+        {
+            ProjectionCellState state = result[i];
+            if (state == ProjectionCellState.MatchingEmpty)
+            {
+                if (highlighted[i])
+                {
+                    renderers[i].material.color = originalColors[i];
+                    highlighted[i] = false;
+                }
+            }
+            else
+            {
+                renderers[i].material.color = ProjectionFeedbackPalette.GetColor(state, highContrast);
+                // Unexpected occupancy may be on an originally empty target cell.
+                // Track it too, so restoring the puzzle cannot leave diagnostic color behind.
+                highlighted[i] = true;
+            }
+        }
+    }
+
+    /// <summary>
     /// Restores only colors this module changed, leaving untouched cells available
     /// for other visual features. Repeated clearing is safe during session teardown.
     /// </summary>
@@ -98,6 +135,15 @@ public sealed class ProjectionGrid
 
     public int CountMismatches(int[] pattern, IProjectionProbe probe, float maxDistance = 8f)
     {
+        return Evaluate(pattern, probe, maxDistance).MismatchCount;
+    }
+
+    /// <summary>
+    /// Captures target and occupancy together, querying each cell only once. The same
+    /// snapshot supplies result counts, board hints and listener payloads consistently.
+    /// </summary>
+    public ProjectionSurfaceResult Evaluate(int[] pattern, IProjectionProbe probe, float maxDistance = 8f)
+    {
         ValidatePattern(pattern);
         if (probe == null)
         {
@@ -108,18 +154,22 @@ public sealed class ProjectionGrid
             throw new ArgumentOutOfRangeException("maxDistance", "Projection distance must be finite and positive.");
         }
 
-        int mismatches = 0;
+        ProjectionCellState[] states = new ProjectionCellState[cells.Length];
         for (int i = 0; i < cells.Length; i++)
         {
             // The floor and walls have different rotations. Local down always points
             // inward; the coordinator's world up cannot describe all three surfaces.
             bool occupied = probe.IsOccupied(cells[i].transform.position, -cells[i].transform.up, maxDistance);
-            if ((pattern[i] == 1) != occupied)
+            if (pattern[i] == 1)
             {
-                mismatches++;
+                states[i] = occupied ? ProjectionCellState.MatchingRequired : ProjectionCellState.MissingRequired;
+            }
+            else
+            {
+                states[i] = occupied ? ProjectionCellState.UnexpectedOccupied : ProjectionCellState.MatchingEmpty;
             }
         }
-        return mismatches;
+        return new ProjectionSurfaceResult(states);
     }
 
     private void ValidatePattern(int[] pattern)
