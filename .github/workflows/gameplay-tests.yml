@@ -1,0 +1,35 @@
+name: Gameplay logic tests
+
+on:
+  pull_request:
+    paths:
+      - 'stack and slide/Assets/script/**'
+      - 'tests/**'
+      - '.github/workflows/gameplay-tests.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'stack and slide/Assets/script/**'
+      - 'tests/**'
+      - '.github/workflows/gameplay-tests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gameplay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile and run isolated gameplay tests
+        run: python3 tests/run_gameplay_tests.py
