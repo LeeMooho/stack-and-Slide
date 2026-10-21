@@ -5,6 +5,20 @@ using System.Collections.Generic;
 
 namespace UnityEngine
 {
+    // Asset definitions participate in data tests without invoking Unity's importer.
+    // This constructs managed fields only; asset serialization is still an editor check.
+    public class ScriptableObject : Object
+    {
+        public static T CreateInstance<T>() where T : ScriptableObject, new() { return new T(); }
+    }
+
+    [AttributeUsage(AttributeTargets.Class)]
+    public class CreateAssetMenuAttribute : Attribute
+    {
+        public string menuName;
+        public string fileName;
+    }
+
     public class Object
     {
         // Record requests so tests can assert ownership and whole-root cleanup.

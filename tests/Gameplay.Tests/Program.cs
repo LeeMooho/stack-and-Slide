@@ -59,6 +59,7 @@ internal static class Program
         Run("Combined lateral, rotation and down inputs refresh the current support", SameFrameSupport);
         Run("Down-step landing preserves the half-cell boundary", LandingBoundary);
         ButtonSoundTests.Register(Run);
+        StageDataTests.Register(Run);
         // A nonzero exit code lets the same executable fail a local command or CI job.
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;
