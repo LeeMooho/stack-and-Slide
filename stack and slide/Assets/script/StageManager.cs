@@ -74,6 +74,20 @@ public class StageManager : MonoBehaviour
         if (!TryGetStageLayout(stageNumber, out layout))
             return false;
 
+        LoadLayout(layout);
+        return true;
+    }
+
+    /// <summary>
+    /// Publishes the exact immutable layout a coordinator has already preflighted.
+    /// Later edits to an authoring asset cannot replace that validated selection.
+    /// </summary>
+    public void LoadLayout(StageLayout layout)
+    {
+        if (layout == null) throw new ArgumentNullException(nameof(layout));
+        if (layout.CellCount != GridCellCount)
+            throw new ArgumentException("A layout must match the existing 8-by-8 scene grids.", nameof(layout));
+
         // Prepare every copy before publishing the selection to scene-facing fields.
         // This keeps validation failures from partially replacing the active puzzle.
         Dictionary<int, int> inventory = layout.GetInitialInventory();
@@ -91,7 +105,6 @@ public class StageManager : MonoBehaviour
         stage_Floor = floor;
         stage_Wall = wall;
         stage_FrontWall = frontWall;
-        return true;
     }
 
     /// <summary>

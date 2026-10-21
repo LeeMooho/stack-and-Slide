@@ -64,6 +64,7 @@ internal static class Program
         Run("Block registrations reject nonfinite spawn coordinates", InvalidSpawnOffset);
         ProjectionModuleTests.Register(Run);
         InventoryPresenterTests.Register(Run);
+        StageIntegrationTests.Register(Run);
         // A nonzero exit code lets the same executable fail a local command or CI job.
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;

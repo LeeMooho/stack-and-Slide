@@ -1,10 +1,11 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 // Keep serialized field and public method names stable for existing scenes and buttons.
 /// <summary>
-/// Coordinates menu state, puzzle inventory, spawned prefab roots, and projection checks.
+/// Preserves the scene-facing API while composing independent gameplay modules.
 /// The scene supplies its cell arrays, UI objects, and prefab bindings through the Inspector.
 /// </summary>
 public class stage : MonoBehaviour
@@ -53,6 +54,11 @@ public class stage : MonoBehaviour
     public Text TText;
     public Text ZText;
 
+    // Optional extension assets and UI entries. Existing scenes continue to use their
+    // seven saved bindings; new IDs do not need another field or switch branch here.
+    public BlockDefinition[] AdditionalBlocks = new BlockDefinition[0];
+    public InventoryBinding[] AdditionalInventoryBindings = new InventoryBinding[0];
+
     public int A1Number;
     private int A2Number;
     private int INumber;
@@ -61,325 +67,305 @@ public class stage : MonoBehaviour
     private int TNumber;
     private int ZNumber;
     private bool isPlaying;
+    private bool isTransitioning;
+    private bool isGenerating;
+    private int sessionVersion;
 
     private int[] stage_Floor;
     private int[] stage_Wall;
     private int[] stage_FrontWall;
     private StageManager stageManager;
-    private Block activeBlock;
-    // Track outer prefab roots, not just their controller children. Cleanup must also remove
-    // child renderers/colliders and any empty roots left after a preview child is destroyed.
-    private readonly List<GameObject> spawnedRoots = new List<GameObject>();
-    private Color[] floorColors;
-    private Color[] wallColors;
-    private Color[] frontWallColors;
+    private BlockCatalog blockCatalog;
+    private readonly BlockInventory inventory = new BlockInventory();
+    private BlockSpawner spawner;
+    private InventoryPresenter inventoryPresenter;
+    private ProjectionGrid floorGrid;
+    private ProjectionGrid wallGrid;
+    private ProjectionGrid frontWallGrid;
+    private IProjectionProbe projectionProbe = new PhysicsProjectionProbe();
 
-    private const float MaxDistance = 8f;
+    public bool IsPlaying { get { return isPlaying; } }
+    public int CurrentStageNumber { get; private set; }
+
+    /// <summary>
+    /// Scoring, progress and result UI can subscribe without changing board physics or
+    /// parsing log text. Evaluation does not automatically end the current session.
+    /// </summary>
+    public event Action<ProjectionResult> PuzzleEvaluated;
+
+    /// <summary>Allows a different occupancy source without replacing grid or UI logic.</summary>
+    public IProjectionProbe ProjectionProbe
+    {
+        get { return projectionProbe; }
+        set
+        {
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            projectionProbe = value;
+        }
+    }
 
     private void Awake()
     {
         playUI.SetActive(false);
         mainMenu.SetActive(true);
         stageManager = GameObject.Find("StageManager").GetComponent<StageManager>();
-        // Cache authored colors before any puzzle pattern is painted over the grid.
-        floorColors = CaptureColors(floor);
-        wallColors = CaptureColors(wall);
-        frontWallColors = CaptureColors(frontwall);
+
+        // Composition happens once. The module classes own their validation and state;
+        // this adapter keeps the Inspector references and button methods stable.
+        blockCatalog = new BlockCatalog(CreateLegacyBlockSpecs(), AdditionalBlocks);
+        spawner = new BlockSpawner(Origin, GhostOrigin);
+        var bindings = CreateLegacyInventoryBindings();
+        if (AdditionalInventoryBindings != null) bindings.AddRange(AdditionalInventoryBindings);
+        inventoryPresenter = new InventoryPresenter(bindings, Location);
+        floorGrid = new ProjectionGrid(floor);
+        wallGrid = new ProjectionGrid(wall);
+        frontWallGrid = new ProjectionGrid(frontwall);
         stageManager.ResetStage();
-        CallVari();
+        ReloadInventoryFromManager();
         UpdateBlockInventory();
     }
 
-    /// <summary>Compacts remaining piece icons into the scene's available display slots.</summary>
-    private void UpdateBlockInventory()
-    {
-        int locationIndex = 0;
-        // Preserve the authored display order, which intentionally puts Z before O/P/T.
-        // Only visible icons consume slots; stage 101 contains six available piece types.
-        UpdateBlockImage(A1Image, A1Text, A1Number, ref locationIndex);
-        UpdateBlockImage(A2Image, A2Text, A2Number, ref locationIndex);
-        UpdateBlockImage(IImage, IText, INumber, ref locationIndex);
-        UpdateBlockImage(ZImage, ZText, ZNumber, ref locationIndex);
-        UpdateBlockImage(OImage, OText, ONumber, ref locationIndex);
-        UpdateBlockImage(PImage, PText, PNumber, ref locationIndex);
-        UpdateBlockImage(TImage, TText, TNumber, ref locationIndex);
-    }
-
-    /// <summary>Hides an exhausted type or places its count in the next visible UI slot.</summary>
-    private void UpdateBlockImage(GameObject image, Text text, int remaining, ref int locationIndex)
-    {
-        image.SetActive(remaining > 0);
-        if (remaining <= 0)
-        {
-            return;
-        }
-
-        image.transform.position = Location[locationIndex].position;
-        text.text = remaining.ToString();
-        locationIndex++;
-    }
-
     /// <summary>
-    /// Starts a supported puzzle from a clean session, including when replaying the same stage.
-    /// Unknown button identifiers leave the current session untouched.
+    /// Resolves and validates the incoming data before touching the current session.
+    /// Adding a StageDefinition asset is sufficient to support another button ID.
     /// </summary>
     public void SelectStage(int stageNumber)
     {
-        if (stageNumber != 101)
+        // SetActive can invoke user components synchronously. Finish one transition
+        // before accepting another so a nested UI callback cannot overwrite half a session.
+        if (isTransitioning) return;
+        StageLayout layout;
+        if (!stageManager.TryGetStageLayout(stageNumber, out layout)) return;
+        ValidateStageBindings(layout);
+
+        isTransitioning = true;
+        try
         {
+            ResetStageState();
+            // Load the exact immutable snapshot already checked, rather than resolving an
+            // asset again after UI/cleanup callbacks may have changed authoring data.
+            stageManager.LoadLayout(layout);
+            ReloadInventoryFromManager();
+            CurrentStageNumber = stageNumber;
+            floorGrid.ShowPattern(stage_Floor);
+            wallGrid.ShowPattern(stage_Wall);
+            frontWallGrid.ShowPattern(stage_FrontWall);
+            UpdateBlockInventory();
+            playUI.SetActive(true);
+            mainMenu.SetActive(false);
+            isPlaying = true;
+        }
+        finally
+        {
+            isTransitioning = false;
+        }
+    }
+
+    private void ValidateStageBindings(StageLayout layout)
+    {
+        if (layout.CellCount != floorGrid.CellCount || layout.CellCount != wallGrid.CellCount
+            || layout.CellCount != frontWallGrid.CellCount)
+            throw new InvalidOperationException("Stage patterns must match all three scene grids.");
+
+        Dictionary<int, int> stock = layout.GetInitialInventory();
+        foreach (KeyValuePair<int, int> entry in stock)
+        {
+            if (entry.Value == 0) continue;
+            BlockSpec specification;
+            if (!blockCatalog.TryGet(entry.Key, out specification))
+                throw new InvalidOperationException("No block definition exists for inventory ID " + entry.Key + ".");
+            specification.ValidatePrefabs();
+        }
+        inventoryPresenter.ValidateStock(stock);
+    }
+
+    public void GenerateBlock(int blockNumber)
+    {
+        if (!isPlaying || isTransitioning || isGenerating) return;
+        SynchronizeLegacyInventory();
+        BlockSpec specification;
+        if (!blockCatalog.TryGet(blockNumber, out specification) || inventory.GetRemaining(blockNumber) <= 0)
             return;
-        }
 
-        // Clear physical pieces and restore the outgoing pattern before loading new data.
-        // Resetting only the counts would let an old solution remain on a fresh board.
-        ResetStageState();
-        playUI.SetActive(true);
-        mainMenu.SetActive(false);
-        stageManager.stage101();
-        CallVari();
-        isPlaying = true;
-        FloorColor();
-        UpdateBlockInventory();
-    }
-
-    /// <summary>Paints the occupied silhouette cells on all three projection surfaces.</summary>
-    private void FloorColor()
-    {
-        if (!isPlaying)
+        int expectedSession = sessionVersion;
+        isGenerating = true;
+        try
         {
-            return;
+            // A blocked, failed or canceled spawn must not consume stock. A prefab may
+            // return to the menu or select a new stage from its synchronous callbacks.
+            if (!spawner.TrySpawn(specification) || expectedSession != sessionVersion || !isPlaying)
+                return;
+            // All stock writers either hold this guard or cancel the pending spawn.
+            // An unsuccessful debit therefore signals a broken coordinator invariant.
+            if (!inventory.TryConsume(blockNumber))
+                throw new InvalidOperationException("A completed spawn must have available inventory.");
+            pre_GhostBlock = spawner.CurrentGhost;
+            MirrorLegacyCounts();
+            UpdateBlockInventory();
         }
-
-        ColorGrid(floor, stage_Floor);
-        ColorGrid(wall, stage_Wall);
-        ColorGrid(frontwall, stage_FrontWall);
-    }
-
-    /// <summary>Highlights required cells without modifying shared material assets.</summary>
-    private static void ColorGrid(GameObject[] cells, int[] pattern)
-    {
-        for (int i = 0; i < pattern.Length; i++)
+        finally
         {
-            if (pattern[i] == 1)
-            {
-                // material gives this renderer its own instance. Changing sharedMaterial
-                // here would also recolor other cells that use the same authored asset.
-                cells[i].GetComponent<MeshRenderer>().material.color = Color.black;
-            }
+            isGenerating = false;
         }
     }
 
-    /// <summary>Reads the original cell colors without creating renderer material copies.</summary>
-    private static Color[] CaptureColors(GameObject[] cells)
+    public int GetRemainingBlocks(int blockNumber)
     {
-        Color[] colors = new Color[cells.Length];
-        for (int i = 0; i < cells.Length; i++)
-        {
-            colors[i] = cells[i].GetComponent<MeshRenderer>().sharedMaterial.color;
-        }
-        return colors;
+        return inventory.GetRemaining(blockNumber);
     }
 
-    /// <summary>Restores only the cells painted by the outgoing puzzle pattern.</summary>
-    private static void RestoreColors(GameObject[] cells, int[] pattern, Color[] colors)
+    public void Slide()
     {
-        for (int i = 0; i < pattern.Length; i++)
-        {
-            if (pattern[i] == 1)
-            {
-                cells[i].GetComponent<MeshRenderer>().material.color = colors[i];
-            }
-        }
+        if (!isPlaying || isTransitioning) return;
+        int expectedSession = sessionVersion;
+        int evaluatedStage = CurrentStageNumber;
+        // Capture the selected inputs together. A replaceable probe may invoke feature
+        // code; a session change during its queries makes this evaluation obsolete.
+        int[] floorPattern = stage_Floor;
+        int[] wallPattern = stage_Wall;
+        int[] frontWallPattern = stage_FrontWall;
+        IProjectionProbe probe = projectionProbe;
+        var result = new ProjectionResult(
+            floorGrid.CountMismatches(floorPattern, probe),
+            wallGrid.CountMismatches(wallPattern, probe),
+            frontWallGrid.CountMismatches(frontWallPattern, probe), evaluatedStage);
+        if (expectedSession != sessionVersion) return;
+        Debug.Log(result.IsSolved ? "성공" : "실패");
+        Action<ProjectionResult> listeners = PuzzleEvaluated;
+        if (listeners != null) listeners(result);
     }
 
-    /// <summary>Retires every piece and preview created during this stage session.</summary>
-    private void ClearSpawnedObjects()
+    public void openMainMenu()
     {
-        foreach (GameObject root in spawnedRoots)
+        if (isTransitioning) return;
+        isTransitioning = true;
+        try
         {
-            if (root != null)
-            {
-                // Destroy is deferred; hide old colliders before another piece can spawn.
-                // This also stops old pieces from affecting ray queries in the same frame.
-                root.SetActive(false);
-                Destroy(root);
-            }
+            ResetStageState();
+            playUI.SetActive(false);
+            mainMenu.SetActive(true);
         }
-        spawnedRoots.Clear();
-        activeBlock = null;
-        pre_GhostBlock = null;
+        finally
+        {
+            isTransitioning = false;
+        }
     }
 
-    /// <summary>
-    /// Returns gameplay data and visuals to their menu baseline, without changing menu panels.
-    /// Shared by stage selection and menu return so those paths cannot leave different state.
-    /// </summary>
     private void ResetStageState()
     {
-        ClearSpawnedObjects();
-        // The old arrays identify which colors need restoring. Do this before ResetStage
-        // replaces them and CallVari rebinds the controller to fresh, empty patterns.
-        RestoreColors(floor, stage_Floor, floorColors);
-        RestoreColors(wall, stage_Wall, wallColors);
-        RestoreColors(frontwall, stage_FrontWall, frontWallColors);
-        stageManager.ResetStage();
-        CallVari();
+        // Revoke play before retiring roots: their OnDisable callbacks must not start
+        // another generation while the previous session is still being dismantled.
         isPlaying = false;
+        sessionVersion++;
+        spawner.Clear();
+        pre_GhostBlock = null;
+        floorGrid.ClearPattern();
+        wallGrid.ClearPattern();
+        frontWallGrid.ClearPattern();
+        stageManager.ResetStage();
+        ReloadInventoryFromManager();
+        CurrentStageNumber = 0;
         UpdateBlockInventory();
+    }
+
+    private void UpdateBlockInventory()
+    {
+        bool wasTransitioning = isTransitioning;
+        isTransitioning = true;
+        try
+        {
+            // Present one complete stock snapshot before accepting UI lifecycle actions.
+            inventoryPresenter.Render(inventory);
+        }
+        finally
+        {
+            isTransitioning = wasTransitioning;
+        }
     }
 
     private void OnDestroy()
     {
-        // Spawned roots are not children of the stage object, so explicitly retire them
-        // if the coordinator itself is removed rather than relying on its hierarchy.
-        ClearSpawnedObjects();
+        isPlaying = false;
+        isTransitioning = true;
+        sessionVersion++;
+        // Awake can fail on an invalid binding before the spawner has been composed.
+        if (spawner != null) spawner.Clear();
     }
 
     /// <summary>
-    /// Handles the stable numeric piece IDs stored in the scene's button events.
-    /// The adjustments preserve each mesh's authored pivot relative to the shared spawn point.
-    /// </summary>
-    public void GenerateBlock(int blockNumber)
-    {
-        switch (blockNumber)
-        {
-            case 1:
-                SpawnBlock(A1Block, GhostA1Block, Vector3.zero, ref A1Number);
-                break;
-            case 2:
-                SpawnBlock(A2Block, GhostA2Block, new Vector3(0.5f, 0.5f, 0.5f), ref A2Number);
-                break;
-            case 3:
-                SpawnBlock(IBlock, GhostIBlock, new Vector3(0, 0, 0.5f), ref INumber);
-                break;
-            case 4:
-                SpawnBlock(OBlock, GhostOBlock, new Vector3(0.5f, 0, 0), ref ONumber);
-                break;
-            case 5:
-                SpawnBlock(PBlock, GhostPBlock, new Vector3(0, 0.5f, 0.5f), ref PNumber);
-                break;
-            case 6:
-                SpawnBlock(TBlock, GhostTBlock, new Vector3(0, 0.5f, 0), ref TNumber);
-                break;
-            case 7:
-                SpawnBlock(ZBlock, GhostZBlock, new Vector3(0, 0.5f, 0.5f), ref ZNumber);
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Creates one matching piece/preview pair and consumes inventory only when spawning is allowed.
-    /// At most one piece may be under active input control at a time.
-    /// </summary>
-    private void SpawnBlock(GameObject blockPrefab, GameObject ghostPrefab, Vector3 adjustment, ref int remaining)
-    {
-        if (!isPlaying || remaining <= 0 || (activeBlock != null && activeBlock.IsActive))
-        {
-            return;
-        }
-
-        if (activeBlock != null)
-        {
-            // The previous piece has landed. Make its tag a support surface before querying
-            // the next preview, and disable its controller rather than transferring ownership.
-            activeBlock.CompletePlacement();
-        }
-        if (pre_GhostBlock != null)
-        {
-            // The old preview is no longer useful once a new piece is selected. Deactivate
-            // the whole root immediately, even if its visible child already destroyed itself.
-            pre_GhostBlock.SetActive(false);
-            Destroy(pre_GhostBlock);
-        }
-
-        pre_GhostBlock = Instantiate(ghostPrefab, GhostOrigin + adjustment, Quaternion.identity);
-        spawnedRoots.Add(pre_GhostBlock);
-        GameObject blockRoot = Instantiate(blockPrefab, Origin + adjustment, Quaternion.identity);
-        spawnedRoots.Add(blockRoot);
-        // Controllers live on geometry children, while the instantiated objects are roots.
-        // Explicit binding avoids tag-search races and does not depend on Start/Update order.
-        activeBlock = blockRoot.GetComponentInChildren<Block>();
-        activeBlock.Initialize(pre_GhostBlock.GetComponentInChildren<GhostBlock>());
-        remaining--;
-        UpdateBlockInventory();
-    }
-
-    /// <summary>
-    /// Reports whether current block occupancy matches every cell of all three silhouettes.
-    /// This checks the current scene, including a moving Block, rather than requiring all pieces to be fixed.
-    /// </summary>
-    public void Slide()
-    {
-        if (!isPlaying)
-        {
-            return;
-        }
-
-        int mismatches = CountProjectionMismatches(floor, stage_Floor)
-            + CountProjectionMismatches(wall, stage_Wall)
-            + CountProjectionMismatches(frontwall, stage_FrontWall);
-
-        Debug.Log(mismatches == 0 ? "성공" : "실패");
-    }
-
-    /// <summary>Counts missing and unexpected occupancy along one grid's inward rays.</summary>
-    private static int CountProjectionMismatches(GameObject[] cells, int[] pattern)
-    {
-        int mismatches = 0;
-        for (int i = 0; i < pattern.Length; i++)
-        {
-            // Each grid is rotated in the scene; its local down points into the board.
-            // Playable blocks and ghosts both use triggers, so filter all hits by tag.
-            // Using the stage's world up vector would make both wall checks vertical.
-            // Looking through all hits prevents a ghost or grid collider from hiding a piece.
-            RaycastHit[] hits = Physics.RaycastAll(cells[i].transform.position,
-                -cells[i].transform.up, MaxDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
-            bool hasBlock = false;
-            foreach (RaycastHit hit in hits)
-            {
-                if (hit.collider.CompareTag("Block") || hit.collider.CompareTag("OnFixedBlock")
-                    || hit.collider.CompareTag("FixedBlock"))
-                {
-                    hasBlock = true;
-                    break;
-                }
-            }
-
-            // Both directions matter: required cells need a hit, and empty cells must not
-            // contain a piece. A ray miss is therefore a failure when the pattern expects 1.
-            if ((pattern[i] == 1) != hasBlock)
-            {
-                mismatches++;
-            }
-        }
-
-        return mismatches;
-    }
-
-    /// <summary>Leaves gameplay and restores a clean board before showing the main menu.</summary>
-    public void openMainMenu()
-    {
-        ResetStageState();
-        playUI.SetActive(false);
-        mainMenu.SetActive(true);
-    }
-
-    /// <summary>
-    /// Copies available piece counts and binds the current pattern arrays from StageManager.
-    /// Counts are consumed locally during play; patterns remain shared references for this session.
+    /// Compatibility bridge for old callers that set StageManager's public fields.
+    /// Future IDs stay in the dictionary while the seven original counts remain usable.
     /// </summary>
     public void CallVari()
     {
-        A1Number = stageManager.A1Number;
-        A2Number = stageManager.A2Number;
-        INumber = stageManager.INumber;
-        ONumber = stageManager.ONumber;
-        PNumber = stageManager.PNumber;
-        TNumber = stageManager.TNumber;
-        ZNumber = stageManager.ZNumber;
+        // The public compatibility entry point follows the same transition policy as
+        // scene buttons. A UI lifecycle callback cannot replace stock halfway through a render.
+        if (isTransitioning) return;
+        ReloadInventoryFromManager();
+    }
 
+    private void ReloadInventoryFromManager()
+    {
+        // Reloading legacy data is a stock replacement. If a prefab callback requests
+        // it during Instantiate, cancel that pending pair before publishing new counts.
+        if (spawner != null) spawner.CancelPendingSpawn();
+        inventory.Reset(stageManager.CreateInventorySnapshot());
+        MirrorLegacyCounts();
         stage_Floor = stageManager.stage_Floor;
         stage_Wall = stageManager.stage_Wall;
         stage_FrontWall = stageManager.stage_FrontWall;
+    }
+
+    private void MirrorLegacyCounts()
+    {
+        A1Number = inventory.GetRemaining(1);
+        A2Number = inventory.GetRemaining(2);
+        INumber = inventory.GetRemaining(3);
+        ONumber = inventory.GetRemaining(4);
+        PNumber = inventory.GetRemaining(5);
+        TNumber = inventory.GetRemaining(6);
+        ZNumber = inventory.GetRemaining(7);
+    }
+
+    private void SynchronizeLegacyInventory()
+    {
+        // Preserve direct writes through the original fields without losing new IDs.
+        var stock = inventory.Snapshot();
+        stock[1] = A1Number;
+        stock[2] = A2Number;
+        stock[3] = INumber;
+        stock[4] = ONumber;
+        stock[5] = PNumber;
+        stock[6] = TNumber;
+        stock[7] = ZNumber;
+        inventory.Reset(stock);
+    }
+
+    private IEnumerable<BlockSpec> CreateLegacyBlockSpecs()
+    {
+        // These bindings are a migration adapter, not the extensible catalog itself.
+        // AdditionalBlocks can override one ID or supply an entirely new piece type.
+        yield return new BlockSpec(1, A1Block, GhostA1Block, Vector3.zero);
+        yield return new BlockSpec(2, A2Block, GhostA2Block, new Vector3(.5f, .5f, .5f));
+        yield return new BlockSpec(3, IBlock, GhostIBlock, new Vector3(0, 0, .5f));
+        yield return new BlockSpec(4, OBlock, GhostOBlock, new Vector3(.5f, 0, 0));
+        yield return new BlockSpec(5, PBlock, GhostPBlock, new Vector3(0, .5f, .5f));
+        yield return new BlockSpec(6, TBlock, GhostTBlock, new Vector3(0, .5f, 0));
+        yield return new BlockSpec(7, ZBlock, GhostZBlock, new Vector3(0, .5f, .5f));
+    }
+
+    private List<InventoryBinding> CreateLegacyInventoryBindings()
+    {
+        // Preserve the authored display order independently of numeric selection IDs.
+        return new List<InventoryBinding>
+        {
+            new InventoryBinding(1, A1Image, A1Text),
+            new InventoryBinding(2, A2Image, A2Text),
+            new InventoryBinding(3, IImage, IText),
+            new InventoryBinding(7, ZImage, ZText),
+            new InventoryBinding(4, OImage, OText),
+            new InventoryBinding(5, PImage, PText),
+            new InventoryBinding(6, TImage, TText)
+        };
     }
 }
