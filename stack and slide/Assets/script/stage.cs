@@ -69,7 +69,13 @@ public class stage : MonoBehaviour
     private bool isPlaying;
     private bool isTransitioning;
     private bool isGenerating;
+    private bool isEvaluating;
+    private bool inputSuspended;
     private int sessionVersion;
+    private int dataRevision;
+    private int initialBlockCount;
+    private int blocksSpawned;
+    private double startedAtSeconds;
 
     private int[] stage_Floor;
     private int[] stage_Wall;
@@ -86,6 +92,26 @@ public class stage : MonoBehaviour
 
     public bool IsPlaying { get { return isPlaying; } }
     public int CurrentStageNumber { get; private set; }
+
+    // Late-bound features can reconcile from this snapshot instead of assuming that
+    // they observed every prior event or that two attempts at one stage are the same.
+    public StageSessionInfo CurrentSession
+    {
+        get
+        {
+            return new StageSessionInfo(sessionVersion, isPlaying ? CurrentStageNumber : 0,
+                isPlaying ? initialBlockCount : 0, isPlaying ? blocksSpawned : 0, startedAtSeconds);
+        }
+    }
+
+    public event Action<StageSessionInfo> SessionChanged;
+    public event Action<BlockSpawnInfo> BlockSpawned;
+
+    // Built-in progression records committed state before public extension callbacks
+    // can navigate away. Public listeners remain free to start the next puzzle.
+    internal event Action<StageSessionInfo> SessionCommitted;
+    internal event Action<BlockSpawnInfo> BlockCommitted;
+    internal event Action<ProjectionResult> EvaluationCommitted;
 
     /// <summary>
     /// Scoring, progress and result UI can subscribe without changing board physics or
@@ -125,6 +151,15 @@ public class stage : MonoBehaviour
         UpdateBlockInventory();
     }
 
+    private void Start()
+    {
+        // Runtime composition makes the feature visible in existing scenes without
+        // replacing their serialized hierarchy or requiring new Inspector wiring.
+        GameplayExperience experience = GetComponent<GameplayExperience>();
+        if (experience == null) experience = gameObject.AddComponent<GameplayExperience>();
+        experience.Initialize(this);
+    }
+
     /// <summary>
     /// Resolves and validates the incoming data before touching the current session.
     /// Adding a StageDefinition asset is sufficient to support another button ID.
@@ -136,7 +171,7 @@ public class stage : MonoBehaviour
         if (isTransitioning) return;
         StageLayout layout;
         if (!stageManager.TryGetStageLayout(stageNumber, out layout)) return;
-        ValidateStageBindings(layout);
+        int incomingBlockCount = ValidateStageBindings(layout);
 
         isTransitioning = true;
         try
@@ -147,6 +182,8 @@ public class stage : MonoBehaviour
             stageManager.LoadLayout(layout);
             ReloadInventoryFromManager();
             CurrentStageNumber = stageNumber;
+            initialBlockCount = incomingBlockCount;
+            startedAtSeconds = Time.unscaledTime;
             floorGrid.ShowPattern(stage_Floor);
             wallGrid.ShowPattern(stage_Wall);
             frontWallGrid.ShowPattern(stage_FrontWall);
@@ -159,17 +196,21 @@ public class stage : MonoBehaviour
         {
             isTransitioning = false;
         }
+        PublishSession();
     }
 
-    private void ValidateStageBindings(StageLayout layout)
+    private int ValidateStageBindings(StageLayout layout)
     {
         if (layout.CellCount != floorGrid.CellCount || layout.CellCount != wallGrid.CellCount
             || layout.CellCount != frontWallGrid.CellCount)
             throw new InvalidOperationException("Stage patterns must match all three scene grids.");
 
         Dictionary<int, int> stock = layout.GetInitialInventory();
+        int total = 0;
         foreach (KeyValuePair<int, int> entry in stock)
         {
+            // Reject unrepresentable counters before clearing a running attempt.
+            total = checked(total + entry.Value);
             if (entry.Value == 0) continue;
             BlockSpec specification;
             if (!blockCatalog.TryGet(entry.Key, out specification))
@@ -177,17 +218,19 @@ public class stage : MonoBehaviour
             specification.ValidatePrefabs();
         }
         inventoryPresenter.ValidateStock(stock);
+        return total;
     }
 
     public void GenerateBlock(int blockNumber)
     {
-        if (!isPlaying || isTransitioning || isGenerating) return;
+        if (!isPlaying || isTransitioning || isGenerating || isEvaluating || inputSuspended) return;
         SynchronizeLegacyInventory();
         BlockSpec specification;
         if (!blockCatalog.TryGet(blockNumber, out specification) || inventory.GetRemaining(blockNumber) <= 0)
             return;
 
         int expectedSession = sessionVersion;
+        BlockSpawnInfo committed = null;
         isGenerating = true;
         try
         {
@@ -199,13 +242,24 @@ public class stage : MonoBehaviour
             // An unsuccessful debit therefore signals a broken coordinator invariant.
             if (!inventory.TryConsume(blockNumber))
                 throw new InvalidOperationException("A completed spawn must have available inventory.");
+            blocksSpawned = checked(blocksSpawned + 1);
             pre_GhostBlock = spawner.CurrentGhost;
             MirrorLegacyCounts();
             UpdateBlockInventory();
+            committed = new BlockSpawnInfo(sessionVersion, CurrentStageNumber, blockNumber, blocksSpawned);
         }
         finally
         {
             isGenerating = false;
+        }
+        if (committed != null)
+        {
+            Action<BlockSpawnInfo> record = BlockCommitted;
+            if (record != null) record(committed);
+            // Internal observers may themselves change scene state. Preserve the old
+            // payload for extensions, which can compare its session with CurrentSession.
+            Action<BlockSpawnInfo> listeners = BlockSpawned;
+            if (listeners != null) listeners(committed);
         }
     }
 
@@ -216,23 +270,61 @@ public class stage : MonoBehaviour
 
     public void Slide()
     {
-        if (!isPlaying || isTransitioning) return;
+        if (!isPlaying || isTransitioning || isGenerating || isEvaluating || inputSuspended) return;
         int expectedSession = sessionVersion;
-        int evaluatedStage = CurrentStageNumber;
-        // Capture the selected inputs together. A replaceable probe may invoke feature
-        // code; a session change during its queries makes this evaluation obsolete.
-        int[] floorPattern = stage_Floor;
-        int[] wallPattern = stage_Wall;
-        int[] frontWallPattern = stage_FrontWall;
-        IProjectionProbe probe = projectionProbe;
-        var result = new ProjectionResult(
-            floorGrid.CountMismatches(floorPattern, probe),
-            wallGrid.CountMismatches(wallPattern, probe),
-            frontWallGrid.CountMismatches(frontWallPattern, probe), evaluatedStage);
-        if (expectedSession != sessionVersion) return;
-        Debug.Log(result.IsSolved ? "성공" : "실패");
+        int expectedData = dataRevision;
+        ProjectionResult result;
+        isEvaluating = true;
+        try
+        {
+            // Capture selected inputs together. Reentrant probes cannot spawn more
+            // geometry mid-query; navigation or a data reload cancels this evaluation.
+            int evaluatedStage = CurrentStageNumber;
+            int[] floorPattern = stage_Floor;
+            int[] wallPattern = stage_Wall;
+            int[] frontWallPattern = stage_FrontWall;
+            IProjectionProbe probe = projectionProbe;
+            result = new ProjectionResult(
+                floorGrid.Evaluate(floorPattern, probe),
+                wallGrid.Evaluate(wallPattern, probe),
+                frontWallGrid.Evaluate(frontWallPattern, probe), evaluatedStage, expectedSession, blocksSpawned);
+            if (expectedSession != sessionVersion || expectedData != dataRevision) return;
+            Debug.Log(result.IsSolved ? "성공" : "실패");
+            Action<ProjectionResult> record = EvaluationCommitted;
+            if (record != null) record(result);
+        }
+        finally
+        {
+            isEvaluating = false;
+        }
         Action<ProjectionResult> listeners = PuzzleEvaluated;
         if (listeners != null) listeners(result);
+    }
+
+    /// <summary>Applies diagnostic colors only to the attempt that produced the result.</summary>
+    public bool ShowProjectionFeedback(ProjectionResult result, bool showHints, bool highContrast)
+    {
+        if (!isPlaying || result == null || result.SessionId != sessionVersion
+            || result.StageNumber != CurrentStageNumber) return false;
+        if (!showHints)
+        {
+            floorGrid.ShowPattern(stage_Floor);
+            wallGrid.ShowPattern(stage_Wall);
+            frontWallGrid.ShowPattern(stage_FrontWall);
+            return true;
+        }
+        if (result.FloorResults == null || result.WallResults == null || result.FrontWallResults == null)
+            return false;
+        floorGrid.ShowFeedback(result.FloorResults, highContrast);
+        wallGrid.ShowFeedback(result.WallResults, highContrast);
+        frontWallGrid.ShowFeedback(result.FrontWallResults, highContrast);
+        return true;
+    }
+
+    public void SetInputSuspended(bool suspended)
+    {
+        inputSuspended = suspended;
+        if (spawner != null) spawner.SetInputSuspended(suspended);
     }
 
     public void openMainMenu()
@@ -249,6 +341,16 @@ public class stage : MonoBehaviour
         {
             isTransitioning = false;
         }
+        PublishSession();
+    }
+
+    private void PublishSession()
+    {
+        StageSessionInfo snapshot = CurrentSession;
+        Action<StageSessionInfo> record = SessionCommitted;
+        if (record != null) record(snapshot);
+        Action<StageSessionInfo> listeners = SessionChanged;
+        if (listeners != null) listeners(snapshot);
     }
 
     private void ResetStageState()
@@ -257,6 +359,10 @@ public class stage : MonoBehaviour
         // another generation while the previous session is still being dismantled.
         isPlaying = false;
         sessionVersion++;
+        CurrentStageNumber = 0;
+        initialBlockCount = 0;
+        blocksSpawned = 0;
+        startedAtSeconds = Time.unscaledTime;
         spawner.Clear();
         pre_GhostBlock = null;
         floorGrid.ClearPattern();
@@ -264,7 +370,6 @@ public class stage : MonoBehaviour
         frontWallGrid.ClearPattern();
         stageManager.ResetStage();
         ReloadInventoryFromManager();
-        CurrentStageNumber = 0;
         UpdateBlockInventory();
     }
 
@@ -310,6 +415,7 @@ public class stage : MonoBehaviour
         // it during Instantiate, cancel that pending pair before publishing new counts.
         if (spawner != null) spawner.CancelPendingSpawn();
         inventory.Reset(stageManager.CreateInventorySnapshot());
+        dataRevision++;
         MirrorLegacyCounts();
         stage_Floor = stageManager.stage_Floor;
         stage_Wall = stageManager.stage_Wall;

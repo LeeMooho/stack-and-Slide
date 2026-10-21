@@ -67,6 +67,7 @@ internal static class Program
         StageIntegrationTests.Register(Run);
         ProgressionTests.Register(Run);
         BuiltInChallengeTests.Register(Run);
+        GameplayExperienceTests.Register(Run);
         ExperienceHudTests.Register(Run);
         // A nonzero exit code lets the same executable fail a local command or CI job.
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
@@ -83,6 +84,9 @@ internal static class Program
         UObject.Destroyed.Clear();
         UObject.AfterInstantiate = null;
         UObject.AfterSetActive = null;
+        PlayerPrefs.ResetForTests();
+        Time.unscaledTime = 0;
+        Time.unscaledDeltaTime = 0;
         Physics.Results.Clear();
         Physics.AllResults.Clear();
         Physics.Directions.Clear();
