@@ -46,6 +46,21 @@ Unity가 프로젝트를 다시 가져오면 캐시를 생성하며, IDE 프로�
 점수·진행도 기능은 평가 당시 스테이지 ID가 포함된 `PuzzleEvaluated` 이벤트를 구독합니다.
 구체적인 등록 순서와 확장 예제는 영어로 작성한 [모듈 구조 안내](docs/gameplay-architecture.md)에 있습니다.
 
+## 플레이 피드백과 업적
+
+기존 씬을 실행하면 새 HUD가 자동으로 연결됩니다.
+
+- 타이머·판정 횟수·사용 블록 수·최고 점수·별 등급을 표시합니다.
+- 판정한 격자에서 누락·초과·일치 칸을 구분하고 면별 오류 수와 색상 설명을 제공합니다.
+- 첫 클리어 축하 효과, 개선 콤보, 로컬 저장 업적 6개를 추가했습니다.
+- 힌트·고대비·모션 줄이기 설정과 업적 패널을 제공합니다.
+- 메뉴에서 짧은 도전 **Warm-up I (102)**, **Flat square (103)** 및 기존 **Original tower (101)**를 선택합니다.
+
+반복 판정은 보상을 중복 지급하지 않으며, XP는 스테이지별 최고 점수 합계로 계산합니다.
+업적 패널을 열면 블록 입력이 잠기고 타이머는 계속 진행합니다.
+규칙·저장 위치·확장 방법은 영어 [플레이 경험 안내](docs/player-experience.md),
+도전 스테이지의 목표 배치와 조작 경로는 [배치 검증 안내](docs/challenge-layouts.md)에 있습니다.
+
 ## 회귀 테스트
 
 .NET 8 SDK와 Python 3가 있는 환경에서 저장소 루트 기준으로 실행합니다. 자세한 Windows·클라우드 실행법은 [테스트 안내](tests/README.md)에 있습니다.
@@ -60,10 +75,10 @@ python3 tests/run_gameplay_tests.py
 실패하면 실패 종료 코드를 반환합니다.
 PR과 `master` 변경 시 GitHub Actions가 같은 독립 테스트를 실행합니다.
 
-Unity 검증 도구의 원본 격리·오류 처리도 테스트할 수 있습니다.
+Unity 검증 도구의 원본 격리·오류 처리와 실제 씬·프리팹 데이터에 기반한 도전 배치를 함께 검사합니다.
 
 ```sh
-python3 -m unittest discover -s tools -p 'test_validate_unity.py' -v
+python3 -m unittest discover -s tools -p 'test_*.py' -v
 ```
 
 이 테스트는 Unity API를 대체한 독립 로직 테스트입니다. 에셋 가져오기, Unity의 수명 주기·물리·렌더링,

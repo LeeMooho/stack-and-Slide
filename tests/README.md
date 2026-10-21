@@ -28,3 +28,17 @@ dotnet run --project tests/Gameplay.Tests
 판정 이벤트는 리스너가 다음 스테이지로 이동한 뒤에도 평가 당시 ID를 보존해야 합니다.
 
 확장할 때의 책임 분리와 에셋 등록 순서는 [영어 모듈 안내](../docs/gameplay-architecture.md)를 참고하세요.
+
+`ProgressionTests`는 점수·별·업적·최고 기록, 중복 방지, 저장 검증과 실패 복구를 검사합니다.
+`GameplayExperienceTests`는 실제 세션과 HUD·업적·저장 연결, 콜백 순서, 모달 입력 잠금을 검사합니다.
+`ExperienceHudTests`는 입력 연결, 안전 영역 계산, 모션 줄이기, 제한된 토스트·파티클 소유권을 검사합니다.
+`BuiltInChallengeTests`는 추가 도전 102·103의 데이터와 사용자 정의 에셋 우선순위를 검사합니다.
+
+Python 테스트는 검증 도구와 실제 에셋 데이터 기반 배치 증명을 함께 실행합니다.
+
+```sh
+python3 -m unittest discover -s tools -p 'test_*.py' -v
+```
+
+`test_challenge_layouts.py`는 실제 Unity YAML의 격자 레이와 활성 충돌체를 읽습니다.
+이는 목표 배치의 기하학적 가능성을 확인하며 PhysX·고스트 착지·화면 렌더링을 실행하는 테스트는 아닙니다.

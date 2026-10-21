@@ -21,6 +21,10 @@ flowchart TD
     PP[PhysicsProjectionProbe] -. implements .-> I
     S --> PR[ProjectionResult]
     PR --> E[PuzzleEvaluated listeners]
+    S --> GC[GameplayExperience]
+    GC --> PT[ProgressionTracker]
+    PT --> PS[IProgressStore]
+    GC --> HUD[ExperienceHud]
 ```
 
 ## Responsibilities and extension points
@@ -37,21 +41,24 @@ flowchart TD
 | `ProjectionGrid` | One surface's cells, original highlight colors and binary-pattern comparison | Unity ray-query implementation and score rules |
 | `IProjectionProbe` / `PhysicsProjectionProbe` | Occupancy observations / Unity physics adapter | Deciding whether a cell should be occupied |
 | `ProjectionResult` | Evaluated stage ID and immutable mismatch counts for each surface | Mutable session state and progression |
+| `ProgressionTracker` / `ProgressProfile` | Attempt score, stars, bests, XP and local achievement rules | Unity objects, time sources and platform accounts |
+| `IProgressStore` / `PlayerPrefsProgressStore` | Persistence boundary / device-local Unity adapter | Score rules and HUD objects |
+| `ExperienceHud` / `GameplayExperience` | Owned UGUI view / committed-state coordination | Native board queries and content definitions |
 | `stage` | Scene bindings, session orchestration and existing button entry points | Content-specific piece switches and score policy |
 
 `StageLayout` copies the inventory and pattern data it receives. Its inventory and pattern accessors return copies, so callers cannot rewrite an active layout by editing an array or dictionary they obtained earlier. `StageDefinition.CreateLayout(...)` is the conversion boundary from mutable Inspector data to that runtime snapshot.
 
-The legacy fields remain a compatibility layer. Built-in piece IDs 1–7 and stage 101 still work without creating new assets. New features should use the asset registration and query APIs rather than adding more parallel legacy fields.
+The legacy fields remain a compatibility layer. Built-in piece IDs 1–7 and stage 101 still work without creating new assets. The experience also supplies short built-in challenges 102 and 103; the example below uses a new ID 202. New features should use the asset registration and query APIs rather than adding more parallel legacy fields.
 
-## Add stage 102 in the Editor
+## Add stage 202 in the Editor
 
-1. Stop Play mode. In the Project window, choose **Create → Stack and Slide → Stage Definition** and name the asset `Stage102`.
-2. Set `StageNumber` to `102`.
+1. Stop Play mode. In the Project window, choose **Create → Stack and Slide → Stage Definition** and name the asset `Stage202`.
+2. Set `StageNumber` to `202`.
 3. Fill `Inventory` with `BlockStock` entries. Each entry has a positive `BlockId` and a nonnegative `Count`. Use unique IDs; for example, `{ BlockId: 1, Count: 2 }` and `{ BlockId: 8, Count: 1 }` after registering piece 8.
 4. Set `Floor`, `Wall` and `FrontWall` to 64 elements each. Use only `0` and `1`. Index order matches the corresponding `floor`, `wall` and `frontwall` Inspector arrays on the scene's `stage` component, so a row-major drawing must follow that authored ordering.
-5. Add `Stage102` to `AdditionalStages` on the scene's `StageManager`.
+5. Add `Stage202` to `AdditionalStages` on the scene's `StageManager`.
 6. Assign all inventory UI bindings and enough `Location` slots for its visible piece kinds, then enter Play mode.
-7. Wire a stage-selection button to the existing `stage.SelectStage(int)` method with argument `102`.
+7. Wire a stage-selection button to the existing `stage.SelectStage(int)` method with argument `202`.
 
 `StageManager` overlays these definitions on its built-in catalog. A registered definition with ID 101 intentionally replaces the built-in stage data. Duplicate IDs within `AdditionalStages`, null entries and invalid patterns are errors; use one explicit definition per registered ID.
 
@@ -59,7 +66,7 @@ Code that needs a layout without starting gameplay can query the manager directl
 
 ```csharp
 StageLayout layout;
-if (stageManager.TryGetStageLayout(102, out layout))
+if (stageManager.TryGetStageLayout(202, out layout))
 {
     // This is a copy; changing it does not change the registered stage.
     int[] previewFloor = layout.CopyFloor();
@@ -87,46 +94,7 @@ An additional definition may intentionally override a built-in piece ID. Duplica
 
 The `stage.PuzzleEvaluated` event supplies `ProjectionResult` after evaluation. Inspect `StageNumber`, `IsSolved`, `FloorMismatches`, `WallMismatches`, `FrontWallMismatches` and `TotalMismatches` directly. Use the stage ID in the result: an earlier listener may already have selected a different stage. Do not parse the facade's diagnostic `Debug.Log` text.
 
-For example, a separate component can award points once per stage during its lifetime:
-
-```csharp
-using System.Collections.Generic;
-using UnityEngine;
-
-public class PuzzleScore : MonoBehaviour
-{
-    public stage Puzzle;
-    public int Score { get; private set; }
-
-    private readonly HashSet<int> completedStages = new HashSet<int>();
-
-    private void OnEnable()
-    {
-        Puzzle.PuzzleEvaluated += OnPuzzleEvaluated;
-    }
-
-    private void OnDisable()
-    {
-        if (Puzzle != null)
-        {
-            Puzzle.PuzzleEvaluated -= OnPuzzleEvaluated;
-        }
-    }
-
-    private void OnPuzzleEvaluated(ProjectionResult result)
-    {
-        if (!result.IsSolved || !completedStages.Add(result.StageNumber))
-        {
-            return;
-        }
-
-        Score += 100;
-        // Save progress or unlock another stage through this feature's own service.
-    }
-}
-```
-
-Assign `Puzzle` in the Inspector before enabling this component. The `HashSet` prevents repeated evaluations of an already solved stage from awarding points again. Persistence, replay rewards and resetting that history are score-system decisions, not projection-grid responsibilities.
+The built-in `GameplayExperience` now connects `ProgressionTracker` and `ExperienceHud` automatically. Its internal commit subscriptions record a clear before a public result listener can navigate away; public listeners can implement independent feedback or progression features. Read `GameplayExperience.Profile` for defensive personal-best and achievement snapshots rather than maintaining a competing score total. See [player experience](player-experience.md) for the implemented score, star and local-save rules.
 
 UI and feature code can also read `Puzzle.CurrentStageNumber`, `Puzzle.IsPlaying` and `Puzzle.GetRemainingBlocks(blockId)` without accessing the facade's private module instances. A result is an immutable snapshot of one evaluation; keep it if a results screen needs the three surface counts after the session changes.
 
