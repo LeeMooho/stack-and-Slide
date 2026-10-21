@@ -24,8 +24,8 @@ public class StageManager : MonoBehaviour
     public int[] stage_Wall;
     public int[] stage_FrontWall;
 
-    // An asset may also use ID 101 to replace the built-in puzzle without changing
-    // its existing button. IDs must be unique among the explicitly registered assets.
+    // An asset may reuse any built-in ID to replace its puzzle without changing
+    // selection controls. IDs must be unique among explicitly registered assets.
     public StageDefinition[] AdditionalStages = new StageDefinition[0];
 
     private Dictionary<int, int> selectedInventory = new Dictionary<int, int>();
@@ -161,6 +161,16 @@ public class StageManager : MonoBehaviour
         if (stageNumber == 101)
         {
             selected = BuiltInStages.Create101();
+            return true;
+        }
+        if (stageNumber == 102)
+        {
+            selected = BuiltInStages.Create102();
+            return true;
+        }
+        if (stageNumber == 103)
+        {
+            selected = BuiltInStages.Create103();
             return true;
         }
         selected = null;

@@ -47,7 +47,7 @@ internal static class StageDataTests
     }
 
     private static StageLayout SmallLayout(IDictionary<int, int> inventory = null,
-        int[] floor = null, int[] wall = null, int[] frontWall = null, int stageNumber = 102)
+        int[] floor = null, int[] wall = null, int[] frontWall = null, int stageNumber = 202)
     {
         // The pure layout can describe another board size; the scene-facing asset is
         // responsible for checking compatibility with the current 64-cell grid.
@@ -62,7 +62,7 @@ internal static class StageDataTests
         var floor = new[] { 1, 0, 0, 1 };
         var wall = new[] { 0, 1, 1, 0 };
         var front = new[] { 1, 1, 0, 0 };
-        var layout = new StageLayout(102, inventory, floor, wall, front);
+        var layout = new StageLayout(202, inventory, floor, wall, front);
 
         // Changing either the authoring inputs or a returned runtime copy must not
         // mutate a layout that another session or preview may already be using.
@@ -76,7 +76,7 @@ internal static class StageDataTests
         layout.CopyWall()[0] = 1;
         layout.CopyFrontWall()[0] = 0;
 
-        Equal(102, layout.StageNumber);
+        Equal(202, layout.StageNumber);
         Equal(4, layout.CellCount);
         Equal(2, layout.GetInitialInventory()[8]);
         Equal(false, layout.GetInitialInventory().ContainsKey(9));
@@ -90,14 +90,14 @@ internal static class StageDataTests
         Throws<ArgumentException>(() => SmallLayout(stageNumber: 0));
         Throws<ArgumentException>(() => SmallLayout(new Dictionary<int, int> { { 0, 1 } }));
         Throws<ArgumentException>(() => SmallLayout(new Dictionary<int, int> { { 8, -1 } }));
-        Throws<ArgumentNullException>(() => new StageLayout(102, null,
+        Throws<ArgumentNullException>(() => new StageLayout(202, null,
             new[] { 0 }, new[] { 0 }, new[] { 0 }));
         Equal(0, SmallLayout(new Dictionary<int, int> { { 8, 0 } }).GetInitialInventory()[8]);
     }
 
     private static void InvalidPatterns()
     {
-        Throws<ArgumentNullException>(() => new StageLayout(102, new Dictionary<int, int>(),
+        Throws<ArgumentNullException>(() => new StageLayout(202, new Dictionary<int, int>(),
             null, new[] { 0 }, new[] { 0 }));
         Throws<ArgumentException>(() => SmallLayout(floor: new int[0], wall: new int[0], frontWall: new int[0]));
         Throws<ArgumentException>(() => SmallLayout(wall: new[] { 0, 1 }));
@@ -107,7 +107,7 @@ internal static class StageDataTests
         Throws<ArgumentException>(() => SmallLayout(frontWall: new[] { 0, 0, 3, 0 }));
     }
 
-    private static StageDefinition Asset(int stageNumber = 102)
+    private static StageDefinition Asset(int stageNumber = 202)
     {
         var asset = ScriptableObject.CreateInstance<StageDefinition>();
         asset.StageNumber = stageNumber;
@@ -162,9 +162,9 @@ internal static class StageDataTests
     {
         var manager = new StageManager { AdditionalStages = new[] { Asset() } };
         Equal(true, manager.HasStage(101));
-        Equal(true, manager.HasStage(102));
+        Equal(true, manager.HasStage(202));
         Equal(false, manager.HasStage(999));
-        Equal(true, manager.TryLoadStage(102));
+        Equal(true, manager.TryLoadStage(202));
         Equal(3, manager.A1Number);
         Equal(0, manager.A2Number);
         Equal(2, manager.CreateInventorySnapshot()[8]);
@@ -174,7 +174,7 @@ internal static class StageDataTests
 
         manager.stage_Floor[2] = 0;
         manager.A1Number = 0;
-        Equal(true, manager.TryLoadStage(102));
+        Equal(true, manager.TryLoadStage(202));
         Equal(3, manager.A1Number);
         Equal(1, manager.stage_Floor[2]);
         manager.stage101();
@@ -205,8 +205,8 @@ internal static class StageDataTests
         manager.A1Number = 5;
         var previousFloor = manager.stage_Floor;
         StageLayout layout;
-        Equal(true, manager.TryGetStageLayout(102, out layout));
-        Equal(102, layout.StageNumber);
+        Equal(true, manager.TryGetStageLayout(202, out layout));
+        Equal(202, layout.StageNumber);
         Equal(1, layout.CopyFloor()[2]);
         layout.CopyFloor()[2] = 0;
         asset.Floor[2] = 0;
@@ -219,7 +219,7 @@ internal static class StageDataTests
         Equal(false, manager.TryGetStageLayout(999, out layout));
         Equal(null, layout);
         asset.Floor[0] = 2;
-        Throws<InvalidOperationException>(() => manager.TryGetStageLayout(102, out layout));
+        Throws<InvalidOperationException>(() => manager.TryGetStageLayout(202, out layout));
         Equal(5, manager.A1Number);
         Equal(true, ReferenceEquals(previousFloor, manager.stage_Floor));
     }
@@ -230,7 +230,7 @@ internal static class StageDataTests
         manager.stage101();
         var floor = manager.stage_Floor;
         manager.AdditionalStages = new[] { Asset(), Asset() };
-        Throws<InvalidOperationException>(() => manager.TryLoadStage(102));
+        Throws<InvalidOperationException>(() => manager.TryLoadStage(202));
         Equal(1, manager.A1Number);
         Equal(true, ReferenceEquals(floor, manager.stage_Floor));
     }
@@ -246,7 +246,7 @@ internal static class StageDataTests
         // Validate the complete catalog before selecting even a valid or built-in ID.
         // This prevents behavior from depending on the order of Inspector entries.
         Throws<InvalidOperationException>(() => manager.TryLoadStage(101));
-        Throws<InvalidOperationException>(() => manager.HasStage(102));
+        Throws<InvalidOperationException>(() => manager.HasStage(202));
         Equal(1, manager.A1Number);
         Equal(true, ReferenceEquals(floor, manager.stage_Floor));
     }
@@ -274,7 +274,7 @@ internal static class StageDataTests
     private static void InventoryBridge()
     {
         var manager = new StageManager { AdditionalStages = new[] { Asset() } };
-        manager.TryLoadStage(102);
+        manager.TryLoadStage(202);
         manager.A1Number = 7;
         manager.ZNumber = 4;
         var snapshot = manager.CreateInventorySnapshot();
@@ -293,7 +293,7 @@ internal static class StageDataTests
     private static void ResetAdditionalInventory()
     {
         var manager = new StageManager { AdditionalStages = new[] { Asset() } };
-        manager.TryLoadStage(102);
+        manager.TryLoadStage(202);
         manager.ResetStage();
         var snapshot = manager.CreateInventorySnapshot();
         Equal(false, snapshot.ContainsKey(8));

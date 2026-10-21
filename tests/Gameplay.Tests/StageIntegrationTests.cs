@@ -78,21 +78,21 @@ internal static class StageIntegrationTests
 
     private static void AdditionalStage()
     {
-        var definition = StageAsset(102, 1, 2);
+        var definition = StageAsset(202, 1, 2);
         var f = new Program.Fixture(configure: (controller, manager) => manager.AdditionalStages = new[] { definition });
         f.Stage.SelectStage(101);
         f.Stage.GenerateBlock(1);
         var oldRoot = UObject.Spawns[1].Clone;
-        f.Stage.SelectStage(102);
+        f.Stage.SelectStage(202);
         Equal(false, oldRoot.activeSelf);
-        Equal(102, f.Stage.CurrentStageNumber);
+        Equal(202, f.Stage.CurrentStageNumber);
         Equal(true, f.Stage.IsPlaying);
         Equal(2, f.Stage.GetRemainingBlocks(1));
         Equal("2", f.Stage.A1Text.text);
         Equal(Color.black, f.Stage.floor[1].GetComponent<MeshRenderer>().material.color);
         Equal(new Color(1, 1, 1), f.Stage.floor[26].GetComponent<MeshRenderer>().material.color);
         f.Stage.GenerateBlock(1);
-        f.Stage.SelectStage(102);
+        f.Stage.SelectStage(202);
         Equal(2, f.Stage.GetRemainingBlocks(1));
         Equal(2, definition.Inventory[0].Count);
     }
@@ -102,9 +102,9 @@ internal static class StageIntegrationTests
         var f = new Program.Fixture(configure: (controller, manager) =>
         {
             RegisterPiece(controller, true, true);
-            manager.AdditionalStages = new[] { StageAsset(102, 8, 2) };
+            manager.AdditionalStages = new[] { StageAsset(202, 8, 2) };
         });
-        f.Stage.SelectStage(102);
+        f.Stage.SelectStage(202);
         var binding = f.Stage.AdditionalInventoryBindings[0];
         Equal(true, binding.Image.activeSelf);
         Equal("2", binding.CountText.text);
@@ -146,7 +146,7 @@ internal static class StageIntegrationTests
         f.Stage.SelectStage(101);
         f.Stage.GenerateBlock(1);
         var root = UObject.Spawns[1].Clone;
-        Throws<InvalidOperationException>(() => f.Stage.SelectStage(102));
+        Throws<InvalidOperationException>(() => f.Stage.SelectStage(202));
         Equal(true, root.activeSelf);
         Equal(101, f.Stage.CurrentStageNumber);
         Equal(true, f.Stage.IsPlaying);
@@ -160,7 +160,7 @@ internal static class StageIntegrationTests
         AssertSessionSurvives(new Program.Fixture(configure: (controller, manager) =>
         {
             RegisterPiece(controller, true, false);
-            manager.AdditionalStages = new[] { StageAsset(102, 8, 1) };
+            manager.AdditionalStages = new[] { StageAsset(202, 8, 1) };
         }));
     }
 
@@ -169,7 +169,7 @@ internal static class StageIntegrationTests
         AssertSessionSurvives(new Program.Fixture(configure: (controller, manager) =>
         {
             RegisterPiece(controller, false, true);
-            manager.AdditionalStages = new[] { StageAsset(102, 8, 1) };
+            manager.AdditionalStages = new[] { StageAsset(202, 8, 1) };
         }));
     }
 
@@ -178,7 +178,7 @@ internal static class StageIntegrationTests
         AssertSessionSurvives(new Program.Fixture(configure: (controller, manager) =>
         {
             RegisterPiece(controller, true, true);
-            var definition = StageAsset(102, 8, 1);
+            var definition = StageAsset(202, 8, 1);
             definition.Inventory = Enumerable.Range(1, 8)
                 .Select(id => new BlockStock { BlockId = id, Count = 1 }).ToArray();
             manager.AdditionalStages = new[] { definition };
@@ -248,10 +248,10 @@ internal static class StageIntegrationTests
 
     private static void PreflightedSnapshot()
     {
-        var definition = StageAsset(102, 1, 2);
+        var definition = StageAsset(202, 1, 2);
         var manager = new StageManager { AdditionalStages = new[] { definition } };
         StageLayout selected;
-        Equal(true, manager.TryGetStageLayout(102, out selected));
+        Equal(true, manager.TryGetStageLayout(202, out selected));
         definition.Inventory[0].Count = 99;
         definition.Floor[1] = 0;
         manager.LoadLayout(selected);
@@ -310,16 +310,16 @@ internal static class StageIntegrationTests
     private static void SelectionDuringSpawn()
     {
         var f = new Program.Fixture(configure: (controller, manager) =>
-            manager.AdditionalStages = new[] { StageAsset(102, 1, 3) });
+            manager.AdditionalStages = new[] { StageAsset(202, 1, 3) });
         f.Stage.SelectStage(101);
         UObject.AfterInstantiate = clone =>
         {
             UObject.AfterInstantiate = null;
-            f.Stage.SelectStage(102);
+            f.Stage.SelectStage(202);
         };
         f.Stage.GenerateBlock(1);
         Equal(true, f.Stage.IsPlaying);
-        Equal(102, f.Stage.CurrentStageNumber);
+        Equal(202, f.Stage.CurrentStageNumber);
         Equal(3, f.Stage.GetRemainingBlocks(1));
         Equal("3", f.Stage.A1Text.text);
         Equal(null, f.Stage.pre_GhostBlock);
@@ -392,14 +392,14 @@ internal static class StageIntegrationTests
     private static void ResultStageContext()
     {
         var f = new Program.Fixture(configure: (controller, manager) =>
-            manager.AdditionalStages = new[] { StageAsset(102, 1, 1) });
+            manager.AdditionalStages = new[] { StageAsset(202, 1, 1) });
         f.Stage.SelectStage(101);
         f.Stage.ProjectionProbe = new EmptyProbe();
-        f.Stage.PuzzleEvaluated += result => f.Stage.SelectStage(102);
+        f.Stage.PuzzleEvaluated += result => f.Stage.SelectStage(202);
         ProjectionResult observed = null;
         f.Stage.PuzzleEvaluated += result => observed = result;
         f.Stage.Slide();
-        Equal(102, f.Stage.CurrentStageNumber);
+        Equal(202, f.Stage.CurrentStageNumber);
         Equal(101, observed.StageNumber);
         Equal(31, observed.TotalMismatches);
     }

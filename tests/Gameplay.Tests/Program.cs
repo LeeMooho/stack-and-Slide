@@ -66,6 +66,7 @@ internal static class Program
         InventoryPresenterTests.Register(Run);
         StageIntegrationTests.Register(Run);
         ProgressionTests.Register(Run);
+        BuiltInChallengeTests.Register(Run);
         // A nonzero exit code lets the same executable fail a local command or CI job.
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;
