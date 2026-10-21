@@ -1,164 +1,143 @@
-﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class Block : MonoBehaviour {
-    bool MoveOk;
+public class Block : MonoBehaviour
+{
+    private const float MoveStep = 0.5f;
+    private const float RotationStep = 90f;
+
     public GameObject target;
     public GameObject preTarget;
-    bool left_Move2;
     public bool BlockRotation;
-    string type;
-    stage stage1;
-    GhostBlock ghostBlock;
-    float distanceY;
-    bool UpOk;
 
-    private void Awake() {
-        ghostBlock = GameObject.FindGameObjectWithTag("GhostBlock").GetComponent<GhostBlock>();
+    private GhostBlock ghostBlock;
+    private bool canMoveUp;
 
-    }
-    void Update() {
-        if (Input.GetMouseButtonDown(0)) {
-            target = GameObject.FindGameObjectWithTag("Block");
-            //if (target.Equals(gameObject) == true) {
-            //} 
-        } else if (target == null) {
-            target = GameObject.FindGameObjectWithTag("Block");
-        } else if (target.gameObject.tag == "OnFixedBlock") {
+    private void Update()
+    {
+        if (Input.GetMouseButtonDown(0) || target == null || target.CompareTag("OnFixedBlock"))
+        {
             target = GameObject.FindGameObjectWithTag("Block");
         }
 
-        ControlBlock(type);
-        
-        if(target !=null && target.tag == "Block") {
+        ControlBlock(null);
 
+        if (target != null && target.CompareTag("Block"))
+        {
             preTarget = GameObject.FindGameObjectWithTag("OnFixedBlock");
-            if (preTarget != null) {
-                preTarget.gameObject.tag = "FixedBlock";
+            if (preTarget != null)
+            {
+                preTarget.tag = "FixedBlock";
                 Destroy(this);
             }
         }
     }
 
-    
-
-
-    public void ControlBlock(string type) {
-        if (target!=null && target.tag == "Block") {
-            bool LType = (type == "L" ? true : false);
-            if (Input.GetKeyDown(KeyCode.LeftArrow) == true || LType == true) {
-
-                BlockRotation = true;
-                target.transform.parent.Translate(Vector3.right*0.5f, Space.World); 
-            }
-
-            if (Input.GetKeyDown(KeyCode.RightArrow) == true) {
-                BlockRotation = true;
-                target.transform.parent.Translate(Vector3.left * 0.5f, Space.World);
-            }
-
-            if (Input.GetKeyDown(KeyCode.UpArrow) == true) {
-                BlockRotation = true;
-                target.transform.parent.Translate(Vector3.back * 0.5f, Space.World);
-            }
-
-            if (Input.GetKeyDown(KeyCode.DownArrow) == true) {
-                BlockRotation = true;
-                target.transform.parent.Translate(Vector3.forward * 0.5f, Space.World);
-            }
-
-            if (Input.GetKeyDown(KeyCode.Z) == true) {
-                BlockRotation = true;
-                target.transform.parent.Rotate(new Vector3(90, 0, 0), Space.World);
-
-            }
-
-            if (Input.GetKeyDown(KeyCode.X) == true) {
-                BlockRotation = true;
-                target.transform.parent.Rotate(new Vector3(0, 90, 0), Space.World);
-            }
-
-            if (Input.GetKeyDown(KeyCode.C) == true) {
-                BlockRotation = true;
-                target.transform.parent.Rotate(new Vector3(0, 0, 90), Space.World);
-            }
-
-            if (Input.GetKeyDown(KeyCode.A) == true) {
-                BlockRotation = true;
-                UpOk = true;
-                target.transform.parent.Translate(Vector3.down * 0.5f, Space.World);
-                CheckValid();
-            }
-
-            if (Input.GetKeyDown(KeyCode.S) == true) {
-                BlockRotation = true;
-                target.transform.parent.Translate(Vector3.up * 0.5f, Space.World);
-            }
-            
+    public void ControlBlock(string type)
+    {
+        if (target == null || !target.CompareTag("Block"))
+        {
+            return;
         }
 
-
+        if (Input.GetKeyDown(KeyCode.LeftArrow) || type == "L")
+        {
+            MoveBlock(Vector3.right);
+        }
+        if (Input.GetKeyDown(KeyCode.RightArrow))
+        {
+            MoveBlock(Vector3.left);
+        }
+        if (Input.GetKeyDown(KeyCode.UpArrow))
+        {
+            MoveBlock(Vector3.back);
+        }
+        if (Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            MoveBlock(Vector3.forward);
+        }
+        if (Input.GetKeyDown(KeyCode.Z))
+        {
+            RotateBlock(Vector3.right);
+        }
+        if (Input.GetKeyDown(KeyCode.X))
+        {
+            RotateBlock(Vector3.up);
+        }
+        if (Input.GetKeyDown(KeyCode.C))
+        {
+            RotateBlock(Vector3.forward);
+        }
+        if (Input.GetKeyDown(KeyCode.A))
+        {
+            canMoveUp = true;
+            MoveBlock(Vector3.down);
+            CheckValid();
+        }
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            MoveBlock(Vector3.up);
+        }
     }
 
+    private void MoveBlock(Vector3 direction)
+    {
+        BlockRotation = true;
+        target.transform.parent.Translate(direction * MoveStep, Space.World);
+    }
 
+    private void RotateBlock(Vector3 axis)
+    {
+        BlockRotation = true;
+        target.transform.parent.Rotate(axis * RotationStep, Space.World);
+    }
 
-    //public GameObject GetClickedObject() {
-    //    RaycastHit hit;
+    public void CheckValid()
+    {
+        if (target == null)
+        {
+            return;
+        }
 
-    //    Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); //마우스 포인트 근처 좌표를 만든다
-    //    if (Physics.Raycast(ray.origin, ray.direction * 300, out hit) == true) {
-    //        //있으면 오브젝트를 저장한다.
-    //        if (hit.collider.gameObject.tag == "Block") {
-    //            target = hit.collider.gameObject;
-    //        }
-    //    }
-    //        return target;
+        if (ghostBlock == null)
+        {
+            GameObject ghost = GameObject.FindGameObjectWithTag("GhostBlock");
+            if (ghost == null)
+            {
+                return;
+            }
 
-    //}
+            ghostBlock = ghost.GetComponent<GhostBlock>();
+        }
 
-    public void CheckValid() {
-        ghostBlock = GameObject.FindGameObjectWithTag("GhostBlock").GetComponent<GhostBlock>();
-        distanceY = GameObject.FindGameObjectWithTag("GhostBlock").GetComponent<GhostBlock>().distanceY-0.5f-ghostBlock.AdjustY.y;
-        if (distanceY < 0.5f) { 
-                    MoveOk = false;
-                    target.gameObject.tag = "OnFixedBlock";
+        if (ghostBlock == null)
+        {
+            return;
+        }
+
+        float distanceY = ghostBlock.distanceY - MoveStep - ghostBlock.AdjustY.y;
+        if (distanceY < MoveStep)
+        {
+            target.tag = "OnFixedBlock";
             target.transform.parent.Translate(new Vector3(0, -distanceY, 0), Space.World);
         }
     }
 
+    private void OnTriggerStay(Collider other)
+    {
+        if (!other.CompareTag("Floor") && !other.CompareTag("FixedBlock"))
+        {
+            return;
+        }
 
-        //void OnCollisionStay(Collision other) {
-        //    if (other.gameObject.tag == "Floor" || other.gameObject.tag == "FixedBlock") {
-        //        MoveOk = false;
-        //    if (target != null) {
-        //        target.transform.localScale = new Vector3(1, 1, 1);
-        //        target.gameObject.tag = "OnFixedBlock";
-        //    }
+        if (target != null)
+        {
+            target.tag = "OnFixedBlock";
+        }
 
-                
-            
-        //    }
-        //}
-
-    void OnTriggerStay(Collider other) {
-        if (other.gameObject.tag == "Floor" || other.gameObject.tag == "FixedBlock") {
-            
-            if (target != null) { 
-                    target.gameObject.tag = "OnFixedBlock";
-            }
-            
-            BlockUp();
+        if (canMoveUp)
+        {
+            transform.parent.Translate(Vector3.up * MoveStep, Space.World);
+            canMoveUp = false;
         }
     }
-    private void BlockUp() {
-        if (UpOk == true) {
-            transform.parent.Translate(Vector3.up * 0.5f, Space.World);
-            UpOk = false;
-        }
-    }
-
-
 }
-
-

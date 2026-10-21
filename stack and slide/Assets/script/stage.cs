@@ -1,10 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEditor;
 using UnityEngine.UI;
 
-public class stage : MonoBehaviour {
+// Keep serialized field and public method names stable for existing scenes and buttons.
+public class stage : MonoBehaviour
+{
     public GameObject[] floor;
     public GameObject[] wall;
     public GameObject[] frontwall;
@@ -37,8 +36,6 @@ public class stage : MonoBehaviour {
     public GameObject GhostPBlock;
     public GameObject GhostTBlock;
     public GameObject GhostZBlock;
-
-    GameObject pre_Block;
     public GameObject pre_GhostBlock;
 
     public Text A1Text;
@@ -50,32 +47,23 @@ public class stage : MonoBehaviour {
     public Text ZText;
 
     public int A1Number;
-    int A2Number;
-    int INumber;
-    int ONumber;
-    int PNumber;
-    int TNumber;
-    int ZNumber;
-    bool OnPlay;
+    private int A2Number;
+    private int INumber;
+    private int ONumber;
+    private int PNumber;
+    private int TNumber;
+    private int ZNumber;
+    private bool isPlaying;
 
-    int[] stage_Floor;
-    int[] stage_Wall;
-    int[] stage_FrontWall;
+    private int[] stage_Floor;
+    private int[] stage_Wall;
+    private int[] stage_FrontWall;
+    private StageManager stageManager;
 
+    private const float MaxDistance = 8f;
 
-    stage stage1;
-    Block block;
-    StageManager stageManager;
-    MeshRenderer mesh;
-    Material mat;
-
-
-    private RaycastHit hit;
-    private int maxDistance = 8;
-
-
-
-    void Awake() {
+    private void Awake()
+    {
         playUI.SetActive(false);
         mainMenu.SetActive(true);
         stageManager = GameObject.Find("StageManager").GetComponent<StageManager>();
@@ -83,314 +71,150 @@ public class stage : MonoBehaviour {
         CallVari();
     }
 
+    private void UpdateBlockInventory()
+    {
+        int locationIndex = 0;
+        UpdateBlockImage(A1Image, A1Text, A1Number, ref locationIndex);
+        UpdateBlockImage(A2Image, A2Text, A2Number, ref locationIndex);
+        UpdateBlockImage(IImage, IText, INumber, ref locationIndex);
+        UpdateBlockImage(ZImage, ZText, ZNumber, ref locationIndex);
+        UpdateBlockImage(OImage, OText, ONumber, ref locationIndex);
+        UpdateBlockImage(PImage, PText, PNumber, ref locationIndex);
+        UpdateBlockImage(TImage, TText, TNumber, ref locationIndex);
+    }
 
-    void leftBlock() {
-        for (int y = 0; y < 7; y++) {
-            if (A1Number > 0) {
-                A1Image.SetActive(true);
-                A1Image.transform.position = Location[y].transform.position;
-                A1Text.text = "" + A1Number;
-                y++;
-            }
-            else if (A1Number == 0) {
-                A1Image.SetActive(false);
-            }
-            if (A2Number > 0) {
-                A2Image.SetActive(true);
-                A2Image.transform.position = Location[y].transform.position;
-                A2Text.text = "" + A2Number;
-                y++;
-            } else if (A2Number == 0) {
-                A2Image.SetActive(false);
-            }
-            if (INumber > 0) {
-                IImage.SetActive(true);
-                IImage.transform.position = Location[y].transform.position;
-                IText.text = "" + INumber;
-                y++;
-            } else if (INumber == 0) {
-                IImage.SetActive(false);
-            }
-            if (ZNumber > 0) {
-                ZImage.SetActive(true);
-                ZImage.transform.position = Location[y].transform.position;
-                ZText.text = "" + ZNumber;
-                y++;
-            } else if (ZNumber == 0) {
-                ZImage.SetActive(false);
-            }
-            if (ONumber > 0) {
-                OImage.SetActive(true);
-                OImage.transform.position = Location[y].transform.position;
-                OText.text = "" + ONumber;
-                y++;
-            } else if (ONumber == 0) {
-                OImage.SetActive(false);
-            }
-            if (PNumber > 0) {
-                PImage.SetActive(true);
-                PImage.transform.position = Location[y].transform.position;
-                PText.text = "" + PNumber;
-                y++;
-            } else if (PNumber == 0) {
-                PImage.SetActive(false);
-            }
-            if (TNumber > 0) {
-                TImage.SetActive(true);
-                TImage.transform.position = Location[y].transform.position;
-                TText.text = "" + TNumber;
-                y++;
-            } else if (TNumber == 0) {
-                TImage.SetActive(false);
-            }
-
-
-
+    private void UpdateBlockImage(GameObject image, Text text, int remaining, ref int locationIndex)
+    {
+        image.SetActive(remaining > 0);
+        if (remaining <= 0)
+        {
             return;
-
         }
 
-
-
+        image.transform.position = Location[locationIndex].position;
+        text.text = remaining.ToString();
+        locationIndex++;
     }
 
-
-
-
-    void Start() {
-    }
-
-    public void SelectStage(int A) {
-        switch(A){
-            case 101:
-                playUI.SetActive(true);
-                mainMenu.SetActive(false);
-                stageManager.stage101();
-                CallVari();
-                OnPlay = true;
-                FloorColor();
-                leftBlock();
-                break;
-
+    public void SelectStage(int stageNumber)
+    {
+        if (stageNumber != 101)
+        {
+            return;
         }
+
+        playUI.SetActive(true);
+        mainMenu.SetActive(false);
+        stageManager.stage101();
+        CallVari();
+        isPlaying = true;
+        FloorColor();
+        UpdateBlockInventory();
     }
 
+    private void FloorColor()
+    {
+        if (!isPlaying)
+        {
+            return;
+        }
 
+        ColorGrid(floor, stage_Floor);
+        ColorGrid(wall, stage_Wall);
+        ColorGrid(frontwall, stage_FrontWall);
+    }
 
-
-    void FloorColor() {
-
-        if(OnPlay = true) {
-            for (int i = 0; i < 64; i++) {
-                if (stage_Floor[i] == 1) {
-                    floor[i].GetComponent<MeshRenderer>().material.color = new Color(0, 0, 0);
-                }
-
-                if (stage_Wall[i] == 1) {
-                    wall[i].GetComponent<MeshRenderer>().material.color = new Color(0, 0, 0);
-                }
-
-                if (stage_FrontWall[i] == 1) {
-                    frontwall[i].GetComponent<MeshRenderer>().material.color = new Color(0, 0, 0);
-                }
+    private static void ColorGrid(GameObject[] cells, int[] pattern)
+    {
+        for (int i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] == 1)
+            {
+                cells[i].GetComponent<MeshRenderer>().material.color = Color.black;
             }
         }
     }
 
-
-
-    public void GenerateBlock(int A) {
-        switch (A){
+    public void GenerateBlock(int blockNumber)
+    {
+        switch (blockNumber)
+        {
             case 1:
-                Vector3 Adjust1 = new Vector3(0,0,0);
-                pre_GhostBlock = Instantiate(GhostA1Block, GhostOrigin + Adjust1, Quaternion.identity);
-                pre_Block = Instantiate(A1Block, Origin+ Adjust1, Quaternion.identity);
-                A1Number--;
-                leftBlock();
+                SpawnBlock(A1Block, GhostA1Block, Vector3.zero, ref A1Number);
                 break;
-
             case 2:
-                Vector3 Adjust2 = new Vector3(0.5f, 0.5f, 0.5f);
-                pre_GhostBlock = Instantiate(GhostA2Block, GhostOrigin + Adjust2, Quaternion.identity);
-                pre_Block = Instantiate(A2Block, Origin+ Adjust2, Quaternion.identity);
-                A2Number--;
-                leftBlock();
+                SpawnBlock(A2Block, GhostA2Block, new Vector3(0.5f, 0.5f, 0.5f), ref A2Number);
                 break;
-
             case 3:
-                Vector3 Adjust3 = new Vector3(0, 0, 0.5f);
-                pre_GhostBlock = Instantiate(GhostIBlock, GhostOrigin + Adjust3, Quaternion.identity);
-                pre_Block = Instantiate(IBlock, Origin+ Adjust3, Quaternion.identity);
-                INumber--;
-                leftBlock();
+                SpawnBlock(IBlock, GhostIBlock, new Vector3(0, 0, 0.5f), ref INumber);
                 break;
-
             case 4:
-                Vector3 Adjust4 = new Vector3(0.5f, 0, 0);
-                pre_GhostBlock = Instantiate(GhostOBlock, GhostOrigin + Adjust4, Quaternion.identity);
-                pre_Block = Instantiate(OBlock, Origin+ Adjust4, Quaternion.identity);
-                ONumber--;
-                leftBlock();
+                SpawnBlock(OBlock, GhostOBlock, new Vector3(0.5f, 0, 0), ref ONumber);
                 break;
-
             case 5:
-                Vector3 Adjust5 = new Vector3(0, 0.5f, 0.5f);
-                pre_GhostBlock = Instantiate(GhostPBlock, GhostOrigin + Adjust5, Quaternion.identity);
-                pre_Block = Instantiate(PBlock, Origin+ Adjust5, Quaternion.identity);
-                PNumber--;
-                leftBlock();
+                SpawnBlock(PBlock, GhostPBlock, new Vector3(0, 0.5f, 0.5f), ref PNumber);
                 break;
-
             case 6:
-                Vector3 Adjust6 = new Vector3(0, 0.5f, 0);
-                pre_GhostBlock = Instantiate(GhostTBlock, GhostOrigin + Adjust6, Quaternion.identity);
-                pre_Block = Instantiate(TBlock, Origin+ Adjust6, Quaternion.identity);
-                TNumber--;
-                leftBlock();
+                SpawnBlock(TBlock, GhostTBlock, new Vector3(0, 0.5f, 0), ref TNumber);
                 break;
-
             case 7:
-                Vector3 Adjust7 = new Vector3(0, 0.5f, 0.5f);
-                pre_GhostBlock = Instantiate(GhostZBlock, GhostOrigin + Adjust7, Quaternion.identity);
-                pre_Block = Instantiate(ZBlock, Origin+ Adjust7, Quaternion.identity);
-                ZNumber--;
-                leftBlock();
+                SpawnBlock(ZBlock, GhostZBlock, new Vector3(0, 0.5f, 0.5f), ref ZNumber);
                 break;
         }
     }
 
-
-   
-      
-
-
-    public void Slide() {
-        int WallSlide=0;
-        int FrontSlide=0;
-        int FloorSlide=0;
-
-        for (int i = 0; i < 64; i++) {
-
-            if (stage_Floor[i] == 1) {
-
-                if (Physics.Raycast(floor[i].GetComponent<Transform>().position, GetComponent<Transform>().up, out hit, maxDistance)) {
-                    if (hit.collider.gameObject.tag == "Block")
-                        Debug.Log("바닥 있어야 할 것이 있음");
-                    else {
-                        Debug.Log("바닥 있어야 할 것이 없음");
-                        FloorSlide++;
-                            }
-                }
-            } 
-            else {
-                if (Physics.Raycast(floor[i].GetComponent<Transform>().position, GetComponent<Transform>().up,  maxDistance)) {
-
-                    if (hit.collider.gameObject) {
-                        Debug.Log("바닥 없어야 할 것이 있음");
-                        FloorSlide++;
-                    } else
-                        Debug.Log("바닥 없어야 할 것이 없음");
-                }
-
-            }
+    private void SpawnBlock(GameObject blockPrefab, GameObject ghostPrefab, Vector3 adjustment, ref int remaining)
+    {
+        if (remaining <= 0)
+        {
+            return;
         }
 
-
-
-
-        for (int t = 0; t < 64; t++) {
-
-            Debug.DrawRay(wall[t].GetComponent<Transform>().position, GetComponent<Transform>().forward  * maxDistance, Color.red, 20, false);
-
-            if (stage_Wall[t] == 1) {
-
-                if (Physics.Raycast(wall[t].GetComponent<Transform>().position, GetComponent<Transform>().up * (-1), out hit, maxDistance)) {
-                    if (hit.collider.gameObject.tag == "Block")
-                        Debug.Log("벽 있어야 할 것이 있음");
-                    else {
-                        WallSlide++;
-                        Debug.Log("벽 있어야 할 것이 없음");
-                    }
-
-                }
-            } else {
-                if (Physics.Raycast(wall[t].GetComponent<Transform>().position, GetComponent<Transform>().up * (-1), out hit, maxDistance)) {
-
-                    if (hit.collider.gameObject.tag == "Block") {
-                        Debug.Log("벽 없어야 할 것이 있음");
-                        WallSlide++;
-                    } else
-
-                        Debug.Log("벽 없어야 할 것이 없음");
-                }
-            }
-
-
-        }
-    
-
-    
-        for (int j = 0; j< 64; j++) {
-
-
-            if (stage_FrontWall[j] == 1) {
-
-                if (Physics.Raycast(frontwall[j].GetComponent<Transform>().position, GetComponent<Transform>().up* (-1), out hit, maxDistance)) {
-                    if (hit.collider.gameObject.tag == "Block")
-                        Debug.Log("앞벽 있어야 할 것이 있음");
-
-
-                    else {
-                        Debug.Log("앞벽 있어야 할 것이 없음");
-                        FrontSlide++;
-                    }
-
-                }
-            } 
-            else {
-                if (Physics.Raycast(frontwall[j].GetComponent<Transform>().position, GetComponent<Transform>().up * (-1), out hit, maxDistance)) {
-
-                    if (hit.collider.gameObject.tag == "Block") {
-                        FrontSlide++;
-                        Debug.Log("앞벽 없어야 할 것이 있음");
-                    }
-
-
-
-                    else
-                        Debug.Log("앞벽 없어야 할 것이 없음");
-                }
-            }
-
-
-        }
-
-
-
-        if (WallSlide + FrontSlide + FloorSlide > 0) {
-            Debug.Log("실패");
-        }
-
-        else if(WallSlide + FrontSlide + FloorSlide == 0) {
-
-            Debug.Log("성공");
-
-        }
-
-
-
-
+        // The ghost must exist before the playable block's lifecycle callbacks.
+        pre_GhostBlock = Instantiate(ghostPrefab, GhostOrigin + adjustment, Quaternion.identity);
+        Instantiate(blockPrefab, Origin + adjustment, Quaternion.identity);
+        remaining--;
+        UpdateBlockInventory();
     }
 
+    public void Slide()
+    {
+        int mismatches = CountProjectionMismatches(floor, stage_Floor, transform.up)
+            + CountProjectionMismatches(wall, stage_Wall, -transform.up)
+            + CountProjectionMismatches(frontwall, stage_FrontWall, -transform.up);
 
+        Debug.Log(mismatches == 0 ? "성공" : "실패");
+    }
 
-    public void openMainMenu() {
+    private static int CountProjectionMismatches(GameObject[] cells, int[] pattern, Vector3 direction)
+    {
+        int mismatches = 0;
+        for (int i = 0; i < pattern.Length; i++)
+        {
+            RaycastHit hit;
+            bool hasHit = Physics.Raycast(cells[i].transform.position, direction, out hit, MaxDistance);
+            bool hasBlock = hasHit && (hit.collider.CompareTag("Block")
+                || hit.collider.CompareTag("OnFixedBlock")
+                || hit.collider.CompareTag("FixedBlock"));
+
+            if ((pattern[i] == 1) != hasBlock)
+            {
+                mismatches++;
+            }
+        }
+
+        return mismatches;
+    }
+
+    public void openMainMenu()
+    {
         playUI.SetActive(false);
         mainMenu.SetActive(true);
+        isPlaying = false;
     }
 
-
-    public void CallVari() {
+    public void CallVari()
+    {
         A1Number = stageManager.A1Number;
         A2Number = stageManager.A2Number;
         INumber = stageManager.INumber;
@@ -399,26 +223,8 @@ public class stage : MonoBehaviour {
         TNumber = stageManager.TNumber;
         ZNumber = stageManager.ZNumber;
 
-
         stage_Floor = stageManager.stage_Floor;
         stage_Wall = stageManager.stage_Wall;
         stage_FrontWall = stageManager.stage_FrontWall;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     }
-
 }
-
-

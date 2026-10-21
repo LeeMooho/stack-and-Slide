@@ -1,0 +1,21 @@
+# Unity-generated caches and build outputs
+/stack and slide/[Ll]ibrary/
+/stack and slide/[Tt]emp/
+/stack and slide/[Oo]bj/
+/stack and slide/[Ll]ogs/
+/stack and slide/[Bb]uild/
+/stack and slide/[Bb]uilds/
+/stack and slide/[Uu]ser[Ss]ettings/
+
+# Generated IDE projects and local IDE state
+/stack and slide/.vs/
+/stack and slide/.idea/
+/stack and slide/*.csproj
+/stack and slide/*.sln
+/stack and slide/*.suo
+/stack and slide/*.user
+/stack and slide/*.userprefs
+
+# Standalone regression-test build outputs
+/tests/**/bin/
+/tests/**/obj/

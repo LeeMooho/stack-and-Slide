@@ -1,120 +1,86 @@
-﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class GhostBlock : MonoBehaviour {
+public class GhostBlock : MonoBehaviour
+{
     public GameObject cBlock;
-    Vector3 maxY;
-    Block block;
-    stage stage1;
-
     public float distanceY;
-    RaycastHit hit;
-    int layerMask;
     public bool OnInsideY;
     public Vector3 AdjustY;
     public Vector3 pre_AdjustY;
-    bool BlockRotation;
 
-    void Awake() {
-        int layerMask = (-1) - (1 << LayerMask.NameToLayer("Block"));
+    private Vector3 maxY;
+    private Block block;
+
+    private void Awake()
+    {
         OnInsideY = false;
     }
 
-    void Start() {
-        block = GameObject.FindWithTag("Block").GetComponent<Block>();
-        block.BlockRotation = GameObject.FindWithTag("Block").GetComponent<Block>().BlockRotation;
-        stage1 = GameObject.Find("Stage").GetComponent<stage>();
+    private void Start()
+    {
+        GameObject activeBlock = GameObject.FindWithTag("Block");
+        if (activeBlock != null)
+        {
+            block = activeBlock.GetComponent<Block>();
+        }
     }
 
-
-
-
-    //void OnCollisionEnter(Collision other) {
-    //    if (other.gameObject.tag == "OnFixedBlock") {
-    //        Destroy(this.gameObject);
-    //    }
-
-
-
-    //    if (other.gameObject.tag == "FixedBlock" || other.gameObject.tag == "Floor") {
-
-    //        FixedY = true;
-    //        transform.parent.position = cBlock.transform.parent.position - maxY + AdjustY;
-    //        AdjustY += new Vector3(0, 0.1f, 0);
-    //    } 
-
-    //    if(other.gameObject == null) { FixedY = false; }
-    //}
-
-    void OnTriggerStay(Collider other) {
-        if (other.gameObject.tag == "OnFixedBlock") {
-            Destroy(this.gameObject);
+    private void OnTriggerStay(Collider other)
+    {
+        if (other.CompareTag("OnFixedBlock"))
+        {
+            Destroy(gameObject);
         }
 
-
-        if (other.gameObject.tag == "FixedBlock" || other.gameObject.tag == "Floor") {
+        if (cBlock != null && (other.CompareTag("FixedBlock") || other.CompareTag("Floor")))
+        {
             OnInsideY = true;
             AdjustY += new Vector3(0, 0.1f, 0);
             transform.parent.position = cBlock.transform.parent.position - maxY + AdjustY;
         }
-
     }
 
-    void OnTriggerExit(Collider other) { 
-        if (other.gameObject.tag == "FixedBlock" || other.gameObject.tag == "Floor") {
+    private void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("FixedBlock") || other.CompareTag("Floor"))
+        {
             OnInsideY = false;
             pre_AdjustY = AdjustY;
-            
+        }
+    }
 
+    private void Update()
+    {
+        if (block == null)
+        {
+            return;
         }
 
-}
-
-
-    void Update() {
         cBlock = block.target;
-
-        if (block.BlockRotation == true) {
-            AdjustY = new Vector3(0,0,0);
-            pre_AdjustY = new Vector3(0, 0, 0);
-            Debug.Log("Reset");
+        if (block.BlockRotation)
+        {
+            AdjustY = Vector3.zero;
+            pre_AdjustY = Vector3.zero;
             block.BlockRotation = false;
         }
 
-        if (cBlock != null) {
-            if (Physics.Raycast(cBlock.transform.position, new Vector3(0, 1, 0) * (-1), out hit, 20)) {
-                if (hit.collider.gameObject.tag == "Floor" || hit.collider.gameObject.tag == "FixedBlock") {
-                    distanceY = hit.distance;
-                    maxY = new Vector3(0, distanceY, 0);
-                }
-            }
+        if (cBlock == null)
+        {
+            return;
+        }
 
-            transform.parent.rotation = cBlock.transform.parent.rotation;
+        RaycastHit hit;
+        if (Physics.Raycast(cBlock.transform.position, Vector3.down, out hit, 20f)
+            && (hit.collider.CompareTag("Floor") || hit.collider.CompareTag("FixedBlock")))
+        {
+            distanceY = hit.distance;
+            maxY = new Vector3(0, distanceY, 0);
+        }
 
-
-
-
-            if (OnInsideY != true) {
-                
-                transform.parent.position = cBlock.transform.parent.position + pre_AdjustY - maxY;
-                
-
-            }
-            if (OnInsideY == true) {
-                //transform.parent.position = cBlock.transform.parent.position - maxY + pre_AdjustY;
-                
-                //AdjustY = new Vector3(0, 0, 0);
-            }
-
-            //FixedY = false;
-
+        transform.parent.rotation = cBlock.transform.parent.rotation;
+        if (!OnInsideY)
+        {
+            transform.parent.position = cBlock.transform.parent.position + pre_AdjustY - maxY;
         }
     }
-
-
-
 }
-
-
-

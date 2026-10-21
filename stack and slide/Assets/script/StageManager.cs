@@ -1,10 +1,8 @@
-﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-
-
-public class StageManager : MonoBehaviour {
+public class StageManager : MonoBehaviour
+{
+    public const int GridCellCount = 64;
 
     public int A1Number;
     public int A2Number;
@@ -14,15 +12,12 @@ public class StageManager : MonoBehaviour {
     public int TNumber;
     public int ZNumber;
 
-
     public int[] stage_Floor;
     public int[] stage_Wall;
     public int[] stage_FrontWall;
 
-
-    public void ResetStage() {
-
-        
+    public void ResetStage()
+    {
         A1Number = 0;
         A2Number = 0;
         INumber = 0;
@@ -31,46 +26,13 @@ public class StageManager : MonoBehaviour {
         TNumber = 0;
         ZNumber = 0;
 
-        stage_Floor = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        };
-
-        stage_Wall = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        };
-
-
-        stage_FrontWall = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        };
-
+        stage_Floor = new int[GridCellCount];
+        stage_Wall = new int[GridCellCount];
+        stage_FrontWall = new int[GridCellCount];
     }
 
-
-    public void stage101() {
-
-
+    public void stage101()
+    {
         A1Number = 1;
         A2Number = 1;
         INumber = 1;
@@ -79,45 +41,40 @@ public class StageManager : MonoBehaviour {
         TNumber = 1;
         ZNumber = 1;
 
-        stage_Floor = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 1, 1, 1, 1, 0, 0,
-        0, 0, 1, 1, 1, 1, 0, 0,
-        0, 0, 1, 1, 1, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
+        stage_Floor = new int[GridCellCount]
+        {
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 1, 1, 1, 1, 0, 0,
+            0, 0, 1, 1, 1, 1, 0, 0,
+            0, 0, 1, 1, 1, 1, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
         };
 
-        stage_Wall = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 1, 1, 0, 0, 0,
-        0, 0, 0, 1, 1, 0, 0, 0,
-        0, 0, 1, 1, 1, 0, 0, 0,
+        stage_Wall = new int[GridCellCount]
+        {
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 1, 0, 0, 0, 0,
+            0, 0, 0, 1, 1, 0, 0, 0,
+            0, 0, 0, 1, 1, 0, 0, 0,
+            0, 0, 1, 1, 1, 0, 0, 0,
         };
 
-
-        stage_FrontWall = new int[64]{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0,
-        0, 0, 1, 0, 0, 1, 0, 0,
-        0, 0, 1, 1, 1, 1, 0, 0,
-        0, 0, 1, 1, 1, 1, 0, 0,
+        stage_FrontWall = new int[GridCellCount]
+        {
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 1, 0, 0, 0, 0, 0,
+            0, 0, 1, 0, 0, 1, 0, 0,
+            0, 0, 1, 1, 1, 1, 0, 0,
+            0, 0, 1, 1, 1, 1, 0, 0,
         };
-
-
-
-
     }
-
-
-
 }
