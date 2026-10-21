@@ -89,6 +89,11 @@ public class Block : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.A))
         {
             canMoveUp = true;
+            // Earlier inputs may have changed the pose since the ghost's last Update.
+            if (ghostBlock != null)
+            {
+                ghostBlock.RefreshLandingPoint();
+            }
             MoveBlock(Vector3.down);
             CheckValid();
         }

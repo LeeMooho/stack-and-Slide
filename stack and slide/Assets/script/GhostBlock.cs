@@ -48,12 +48,13 @@ public class GhostBlock : MonoBehaviour
         }
     }
 
-    private void Update()
+    public bool RefreshLandingPoint()
     {
         if (block == null || !block.IsActive)
         {
             HasLandingPoint = false;
-            return;
+            cBlock = null;
+            return false;
         }
 
         cBlock = block.target;
@@ -66,7 +67,8 @@ public class GhostBlock : MonoBehaviour
 
         if (cBlock == null)
         {
-            return;
+            HasLandingPoint = false;
+            return false;
         }
 
         HasLandingPoint = false;
@@ -83,17 +85,33 @@ public class GhostBlock : MonoBehaviour
             }
         }
 
-        transform.parent.rotation = cBlock.transform.parent.rotation;
         if (!HasLandingPoint)
         {
             distanceY = 0f;
             maxY = Vector3.zero;
-            transform.parent.position = cBlock.transform.parent.position;
-            return;
+            return false;
         }
 
         distanceY = nearestDistance;
         maxY = Vector3.up * distanceY;
+        return true;
+    }
+
+    private void Update()
+    {
+        bool hasSupport = RefreshLandingPoint();
+        if (cBlock == null)
+        {
+            return;
+        }
+
+        transform.parent.rotation = cBlock.transform.parent.rotation;
+        if (!hasSupport)
+        {
+            transform.parent.position = cBlock.transform.parent.position;
+            return;
+        }
+
         if (!OnInsideY)
         {
             transform.parent.position = cBlock.transform.parent.position + pre_AdjustY - maxY;

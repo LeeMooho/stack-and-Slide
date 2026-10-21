@@ -48,6 +48,8 @@ internal static class Program
         Run("Ghost rotation resets offsets and follows the current target", GhostMovement);
         Run("Ghost landing selects the nearest support behind unrelated hits", NearestSupport);
         Run("Losing support invalidates the previous ghost landing point", LostSupport);
+        Run("Combined lateral, rotation and down inputs refresh the current support", SameFrameSupport);
+        Run("Down-step landing preserves the half-cell boundary", LandingBoundary);
         ButtonSoundTests.Register(Run);
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;
@@ -551,6 +553,44 @@ internal static class Program
         Equal(0f, ghost.distanceY);
         block.CheckValid();
         Equal("Block", block.gameObject.tag);
+    }
+
+    private static void SameFrameSupport()
+    {
+        var block = ActiveBlock();
+        var ghost = new GameObject().AddComponent<GhostBlock>();
+        ghost.transform.parent = new GameObject().transform;
+        block.Initialize(ghost);
+        Physics.AllResults.Enqueue(new[] { Hit("Floor") });
+        Invoke(ghost, "Update");
+        Equal(true, ghost.HasLandingPoint);
+        ghost.AdjustY = Vector3.up;
+        Input.Keys.UnionWith(new[] { KeyCode.LeftArrow, KeyCode.Z, KeyCode.A });
+        Physics.AllResults.Enqueue(new RaycastHit[0]);
+        block.ControlBlock(null);
+        Equal(false, ghost.HasLandingPoint);
+        Equal(Vector3.zero, ghost.AdjustY);
+        Equal("Block", block.gameObject.tag);
+        Equal(new Vector3(.5f, -.5f, 0), block.transform.parent.position);
+        Equal(Vector3.right * 90f, block.transform.parent.LastRotation);
+    }
+
+    private static void LandingBoundary()
+    {
+        foreach (float distance in new[] { .5f, .99f, 1f })
+        {
+            var block = ActiveBlock();
+            var ghost = new GameObject().AddComponent<GhostBlock>();
+            block.Initialize(ghost);
+            var hit = Hit("Floor");
+            hit.distance = distance;
+            Physics.AllResults.Enqueue(new[] { hit });
+            Input.Keys.Clear();
+            Input.Keys.Add(KeyCode.A);
+            block.ControlBlock(null);
+            Equal(distance < 1f ? "OnFixedBlock" : "Block", block.gameObject.tag);
+            Equal(new Vector3(0, distance < 1f ? -distance : -.5f, 0), block.transform.parent.position);
+        }
     }
 
     private sealed class Fixture
