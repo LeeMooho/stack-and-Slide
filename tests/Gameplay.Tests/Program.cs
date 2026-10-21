@@ -62,6 +62,8 @@ internal static class Program
         StageDataTests.Register(Run);
         PieceModuleTests.Register(Run);
         Run("Block registrations reject nonfinite spawn coordinates", InvalidSpawnOffset);
+        ProjectionModuleTests.Register(Run);
+        InventoryPresenterTests.Register(Run);
         // A nonzero exit code lets the same executable fail a local command or CI job.
         Console.WriteLine((total - failures) + "/" + total + " isolated gameplay tests passed.");
         return failures == 0 ? 0 : 1;
@@ -679,12 +681,12 @@ internal static class Program
     /// Supplies only the scene references used by gameplay decisions. It preserves
     /// the real board normals and child-controller layout without importing assets.
     /// </summary>
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         public readonly stage Stage;
         public readonly StageManager Manager;
 
-        public Fixture(Color? authoredFloorColor = null)
+        public Fixture(Color? authoredFloorColor = null, Action<stage, StageManager> configure = null)
         {
             Manager = new GameObject("StageManager").AddComponent<StageManager>();
             Stage = new GameObject("Stage").AddComponent<stage>();
@@ -721,6 +723,9 @@ internal static class Program
                 typeof(stage).GetField(name + "Block").SetValue(Stage, blockRoot);
                 typeof(stage).GetField("Ghost" + name + "Block").SetValue(Stage, ghostRoot);
             }
+            // Extension tests author the same optional references an Inspector would
+            // provide, before the facade composes its runtime modules in Awake.
+            if (configure != null) configure(Stage, Manager);
             Invoke(Stage, "Awake");
         }
 
