@@ -27,8 +27,9 @@ internal static class Program
         Run("A missing required block fails the projection", MissingProjection);
         Run("An unexpected block fails the projection", UnexpectedProjection);
         Run("Non-block hits cannot satisfy a required cell", NonBlockProjection);
+        Run("Ghost and grid hits cannot hide a playable block", OccludedProjection);
         Run("A ray miss cannot reuse an earlier ray hit", IndependentRaycasts);
-        Run("Projection preserves floor and wall ray directions", ProjectionDirections);
+        Run("Projection casts inward from each rotated grid plane", ProjectionDirections);
         Run("Block keyboard and UI movement preserve the half-cell steps", Movement);
         Run("Block keyboard rotations preserve all three axes", Rotation);
         Run("Inactive blocks do not move", InactiveBlock);
@@ -46,6 +47,7 @@ internal static class Program
         GameObject.All.Clear();
         UObject.Spawns.Clear();
         Physics.Results.Clear();
+        Physics.AllResults.Clear();
         Physics.Directions.Clear();
         Input.Keys.Clear();
         Debug.Messages.Clear();
@@ -53,6 +55,7 @@ internal static class Program
         {
             test();
             Equal(0, Physics.Results.Count);
+            Equal(0, Physics.AllResults.Count);
             Console.WriteLine("PASS " + name);
         }
         catch (Exception error)
@@ -189,9 +192,18 @@ internal static class Program
 
     private static void EnqueueProjection(Fixture f, Func<int, int, RaycastHit?> result)
     {
+        EnqueueProjectionHits(f, (grid, cell) =>
+        {
+            var hit = result(grid, cell);
+            return hit.HasValue ? new[] { hit.Value } : new RaycastHit[0];
+        });
+    }
+
+    private static void EnqueueProjectionHits(Fixture f, Func<int, int, RaycastHit[]> result)
+    {
         var grids = new[] { f.Manager.stage_Floor, f.Manager.stage_Wall, f.Manager.stage_FrontWall };
         for (int grid = 0; grid < grids.Length; grid++)
-            for (int cell = 0; cell < 64; cell++) Physics.Results.Enqueue(result(grid, cell));
+            for (int cell = 0; cell < 64; cell++) Physics.AllResults.Enqueue(result(grid, cell));
     }
 
     private static RaycastHit Hit(string tag)
@@ -246,13 +258,27 @@ internal static class Program
         Equal("성공", Debug.Messages.Last());
     }
 
+    private static void OccludedProjection()
+    {
+        var f = new Fixture();
+        f.Manager.stage_Floor[0] = 1;
+        EnqueueProjectionHits(f, (g, c) => g == 0 && c == 0
+            ? new[] { Hit("GhostBlock"), Hit("Floor"), Hit("FixedBlock") } : new RaycastHit[0]);
+        f.Stage.Slide();
+        Equal("성공", Debug.Messages.Last());
+    }
+
     private static void ProjectionDirections()
     {
         var f = new Fixture();
+        f.Stage.transform.up = Vector3.forward;
         EnqueueProjection(f, (g, c) => null);
         f.Stage.Slide();
         Equal(192, Physics.Directions.Count);
-        for (int i = 0; i < 192; i++) Equal(i < 64 ? Vector3.up : Vector3.down, Physics.Directions[i]);
+        for (int i = 0; i < 192; i++)
+        {
+            Equal(i < 64 ? Vector3.up : i < 128 ? Vector3.forward : Vector3.right, Physics.Directions[i]);
+        }
     }
 
     private static Block ActiveBlock()
@@ -363,9 +389,9 @@ internal static class Program
             Stage.mainMenu = new GameObject("MainMenu");
             Stage.Origin = new Vector3(1, 4, 2);
             Stage.GhostOrigin = new Vector3(1, 0, 2);
-            Stage.floor = GridObjects();
-            Stage.wall = GridObjects();
-            Stage.frontwall = GridObjects();
+            Stage.floor = GridObjects(Vector3.down);
+            Stage.wall = GridObjects(Vector3.back);
+            Stage.frontwall = GridObjects(Vector3.left);
             Stage.Location = Enumerable.Range(0, 7).Select(i =>
             {
                 var location = new GameObject().AddComponent<RectTransform>();
@@ -382,11 +408,12 @@ internal static class Program
             Invoke(Stage, "Awake");
         }
 
-        private static GameObject[] GridObjects()
+        private static GameObject[] GridObjects(Vector3 up)
         {
             return Enumerable.Range(0, 64).Select(i =>
             {
                 var cell = new GameObject();
+                cell.transform.up = up;
                 cell.AddComponent<MeshRenderer>();
                 return cell;
             }).ToArray();

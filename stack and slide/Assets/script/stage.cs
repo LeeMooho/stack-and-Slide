@@ -179,23 +179,32 @@ public class stage : MonoBehaviour
 
     public void Slide()
     {
-        int mismatches = CountProjectionMismatches(floor, stage_Floor, transform.up)
-            + CountProjectionMismatches(wall, stage_Wall, -transform.up)
-            + CountProjectionMismatches(frontwall, stage_FrontWall, -transform.up);
+        int mismatches = CountProjectionMismatches(floor, stage_Floor)
+            + CountProjectionMismatches(wall, stage_Wall)
+            + CountProjectionMismatches(frontwall, stage_FrontWall);
 
         Debug.Log(mismatches == 0 ? "성공" : "실패");
     }
 
-    private static int CountProjectionMismatches(GameObject[] cells, int[] pattern, Vector3 direction)
+    private static int CountProjectionMismatches(GameObject[] cells, int[] pattern)
     {
         int mismatches = 0;
         for (int i = 0; i < pattern.Length; i++)
         {
-            RaycastHit hit;
-            bool hasHit = Physics.Raycast(cells[i].transform.position, direction, out hit, MaxDistance);
-            bool hasBlock = hasHit && (hit.collider.CompareTag("Block")
-                || hit.collider.CompareTag("OnFixedBlock")
-                || hit.collider.CompareTag("FixedBlock"));
+            // Each grid is rotated in the scene; its local down points into the board.
+            // Playable blocks and ghosts both use triggers, so filter all hits by tag.
+            RaycastHit[] hits = Physics.RaycastAll(cells[i].transform.position,
+                -cells[i].transform.up, MaxDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+            bool hasBlock = false;
+            foreach (RaycastHit hit in hits)
+            {
+                if (hit.collider.CompareTag("Block") || hit.collider.CompareTag("OnFixedBlock")
+                    || hit.collider.CompareTag("FixedBlock"))
+                {
+                    hasBlock = true;
+                    break;
+                }
+            }
 
             if ((pattern[i] == 1) != hasBlock)
             {

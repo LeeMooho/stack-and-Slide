@@ -111,8 +111,18 @@ namespace UnityEngine
 
     public static class Physics
     {
+        public const int DefaultRaycastLayers = -5;
         public static readonly Queue<RaycastHit?> Results = new Queue<RaycastHit?>();
+        public static readonly Queue<RaycastHit[]> AllResults = new Queue<RaycastHit[]>();
         public static readonly List<Vector3> Directions = new List<Vector3>();
+        public static RaycastHit[] RaycastAll(Vector3 origin, Vector3 direction, float distance,
+            int layerMask, QueryTriggerInteraction queryTriggerInteraction)
+        {
+            if (queryTriggerInteraction != QueryTriggerInteraction.Collide)
+                throw new InvalidOperationException("Projection must include block trigger colliders.");
+            Directions.Add(direction);
+            return AllResults.Dequeue();
+        }
         public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hit, float distance)
         {
             Directions.Add(direction);
@@ -121,6 +131,8 @@ namespace UnityEngine
             return result.HasValue;
         }
     }
+
+    public enum QueryTriggerInteraction { UseGlobal, Ignore, Collide }
 
     public enum KeyCode { LeftArrow, RightArrow, UpArrow, DownArrow, Z, X, C, A, S }
     public static class Input
